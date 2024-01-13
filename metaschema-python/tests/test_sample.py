@@ -1,4 +1,4 @@
-# Simple test file to make sure the environment is correctly configured
+# Simple test to make sure the pytest environment is correctly configured
 def hello_string(s: str) -> str:
     return f"Hello, {s}!"
 
