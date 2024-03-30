@@ -1,3 +1,6 @@
 [submodule "metaschema"]
 	path = metaschema
 	url = https://github.com/usnistgov/metaschema.git
+[submodule "OSCAL"]
+	path = OSCAL
+	url = https://github.com/usnistgov/OSCAL.git

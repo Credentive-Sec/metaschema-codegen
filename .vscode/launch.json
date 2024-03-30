@@ -1,0 +1,41 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "No Arguments",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "metaschema_python"
+        },
+        {
+            "name": "Help message",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "metaschema_python",
+            "args": [
+                "--help"
+            ]
+        },
+        {
+            "name": "Local File",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "metaschema_python",
+            "args": [
+                "OSCAL/src/metaschema/oscal_complete_metaschema.xml"
+            ]
+        },
+        {
+            "name": "Remote URL (OSCAL)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "metaschema_python",
+            "args": [
+                "https://raw.githubusercontent.com/usnistgov/OSCAL/main/src/metaschema/oscal_complete_metaschema.xml",
+            ]
+        },
+    ]
+}
