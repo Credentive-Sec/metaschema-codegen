@@ -26,9 +26,10 @@ args = parser.parse_args()
 
 # Parse the metaschema definition into a tree
 try:
-    oscal_parser = MetaschemaParser(location=args.location)
-    oscal_parser.parse()
+    metaschema_parser = MetaschemaParser(location=args.location)
+    metaschema_root = metaschema_parser.root
+
 
 except Exception as e:
-    print("Error parsing schema:", e)
+    print("Error parsing metaschema:", e)
     sys.exit(1)
