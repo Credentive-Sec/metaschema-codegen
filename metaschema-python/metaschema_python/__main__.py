@@ -17,17 +17,26 @@ parser.add_argument(
 parser.add_argument(
     "-B",
     "--base",
-    dest="base_url",
-    help="[optional] A base URL for obtaining other child schemas. If this is not provided, it will be inferred from the filename.",
+    dest="base",
+    help="[optional] A base URL or directory for obtaining other child schemas. If this is not provided, it will be inferred from the filename.",
+)
+parser.add_argument(
+    "-S",
+    "--schema",
+    dest="schema",
+    help="[optional] The location of the metaschema xsd file.",
 )
 
 args = parser.parse_args()
 
 
-# Parse the metaschema definition into a tree
+# Parse all of the metaschema definitions into trees.
 try:
-    metaschema_parser = MetaschemaParser(location=args.location)
-    metaschema_root = metaschema_parser.root
+    metaschema_parser = MetaschemaParser(
+        location=args.location,
+        schema_file="/home/vscode/metaschema-python/metaschema/schema/xml/metaschema.xsd",
+    )
+    metaschema_contents = metaschema_parser.parse()
 
 
 except Exception as e:
