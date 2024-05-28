@@ -1,5 +1,6 @@
 from pathlib import Path
 from lxml import etree
+import math
 
 #formalNameStr = '{http://csrc.nist.gov/ns/oscal/metaschema/1.0}formal-name'
 #descriptionStr = '{http://csrc.nist.gov/ns/oscal/metaschema/1.0}description'
@@ -185,7 +186,7 @@ class MetaschemaGlobalAssembly:
 
         maxOccurs = schema.attr.get('max-occurs') or 1
         if maxOccurs == "unbounded":
-            maxOccurs = 99999999999 #if python has a way to say "a really big number", i don't know it
+            maxOccurs = math.inf
         else:
             maxOccurs = int(maxOccurs)
         minOccurs = schema.attr.get('min-occurs') or 0
