@@ -29,8 +29,8 @@ Subclasses of Datatype will provide the regular expression constraining the data
 A specific Assembly subclass will contain three pieces of information
 
 1. Mandatory Flags/Fields and their associated classes
-2. Optional Flags/Fields and their associated classes
-3. Constraints associated with the Assembly 
+1. Optional Flags/Fields and their associated classes
+1. Constraints associated with the Assembly 
 
 ## Lists
 
@@ -45,6 +45,28 @@ The hierarchy of objects can be defined in two ways. Traditional inheritance rel
 The inheritance relationship within the library will be simple, with only 1 base class for each type of oscal entity (datatype, assembly, list)
 
 "Contains/Is contained within" will be modeled with packages and modules. Inline assemblies may be modeled as inner classes.
+
+# Implementation options for constraints
+
+## Constraint Types
+
+Metaschema has a formal definition for constraints, but there are some implied constraints beyond the ones explicitly tagged as such. This section discusses all of the various kinds of constraints present in Metaschema, and offers some guidance on implementation.
+
+1. Number of allowed occurences: Expressed using the "min-occurs" and "max-occurs" attributes, this constraint defines the number of permitted elements of a particular type within an assembly. 
+    1. 0..1: min-occurs "0" and max-occurs "1" indicates an optional, singular elements
+    1. 1: max-occurs "1" indicates a singular mandatory element
+    1. Unbounded: max-occurs "unbounded" indicates a element that may occur multiple times, with no upper limit. It is not clear whether an element with max-occurs "unbounded" is required or optional. 
+    1. There is also an explicit "has-cardinality" constraint which limits the occurance of elements with particular field values. These leverage the same min-occurs and max-occurs tags
+1. Value constraints: The majority of constraints in a metaschema based schema impose limits on the possible values of a field or flag, beyond the limits imposed by it's datatype. These are expressed with the "allowed-values" type of constraint, and may be either be applied to the fields of an assembly within the assembly itself, or may be applied to a child element of an assembly using a metapath expression. Finally, "allow-other" indicates that values other than the proposed values may be included.
+1. Uniqueness constraint: Typically applied to identifiers, the uniqueness constraint requires that a fields values must be unique within the document.
+
+##  Constraint Implementations
+
+Constraints will be built using generic functions that will be defined in the Assembly Base Class. These functions will rely on class variables and will ensure that the elements within the object conform to the schema. I recommend the following class variables:
+
+* Cardinality (OPTIONAL/MANDATORY/LIST): The cardinality property will be handled by choosing either a singular structure or list to describe 1 or many elements, and elements with a count of 0..1 will use the Optional\[Class\] type hint modifier or the "Class | None" Pattern. The language will automatically provide the correct cardinality, and we don't need to provide any other logic.
+* Uniqueness (List of attributes): Any attribute in this list must be unique within the context of the container where it is defined. Note that this may mean that the Uniqueness attribute must be applied in a parent object, and may need to be applied as high as at the document level, depending on the scope of the requirement for uniqueness. (**CHECKING IN THE METASCHEMA GITTER**). 
+* VALUE constraints (Dictionary of attribute identifier/allowed values): As with uniquenss, a function written in the Assembly Base class will enforce this constants, and they will be defined as class variables in the appropriate class. The class variables will be dictionaries with a key of identifying the element and value being a list of allowed values for that element. Careful thought will be required to determine whether and how to modify the metapath expressions to be something with more internal structure.
 
 # Approaches to enabling access with python
 
