@@ -77,7 +77,7 @@ class JsonParser:
                     parsed_element["effective-name"] = (
                         key  # "effective-name" because element names can be overridden by "use-name" so we don't know if we're looking at the "name" or "use-name"
                     )
-                    parsed_element["type"] = "flag"
+                    parsed_element["type"] = "field-or-flag"
                     parsed_element["contents"] = [input[key]]
                     parsed_input.append(parsed_element)
                 else:
