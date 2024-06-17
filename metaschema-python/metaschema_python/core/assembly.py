@@ -57,7 +57,7 @@ class XMLTag:
         return XMLTag(xml_tree.getroot())
     
     @staticmethod
-    def JsonfromStr(instr):
+    def JsonfromStr(instr): #Oh, gosh. Please don't write a JSON parser! Look at the 'json' module (https://docs.python.org/3.8/library/json.html) Apologies if I've misunderstood what I'm looking at.
         if instr[:1] == '{':
             str = instr[1:]
             t = {}
