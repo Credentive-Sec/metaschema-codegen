@@ -2,7 +2,7 @@ import argparse
 import sys
 
 from .core.metaschema_parser import MetaschemaParser
-from .core.assembly import Assembly, XMLTag, Context
+from .core.assembly import Context
 
 
 # Parse the command arguments
@@ -45,23 +45,6 @@ except Exception as e:
     sys.exit(1)
 
 ctxt = Context("/workspaces/metaschema-python/OSCAL/src/metaschema/oscal_complete_metaschema.xml")
-
-xml = XMLTag.fromPath("/workspaces/metaschema-python/oscal-content/nist.gov/SP800-53/rev5/xml/NIST_SP-800-53_rev5_catalog.xml")
-json = XMLTag.JsonfromStr(open("/workspaces/metaschema-python/oscal-content/nist.gov/SP800-53/rev5/json/NIST_SP-800-53_rev5_catalog-min.json").read())
-paraxml = XMLTag.fromJson(json.get('catalog'), ctxt.get('catalog'),ctxt) #this line might take a while
-
-#print(xml)
-#print(paraxml)
-
-thingy = Assembly(ctxt.get('catalog'), xml, ctxt)
-parathingy = Assembly(ctxt.get('catalog'), paraxml, ctxt)
-
-if not thingy.validate():
-    print("xml is invalid")
-
-if not parathingy.validate():
-    print("json is invalid")
-
-parajson = thingy.asJson()
+asm = ctxt.instantiate('catalog', 'xml', '/workspaces/metaschema-python/oscal-content/nist.gov/SP800-53/rev5/xml/NIST_SP-800-53_rev5_catalog.xml')
 
 print("finished")
