@@ -123,9 +123,9 @@ class SchemaObject:
         return overrule or bool(re.fullmatch(pattern, str))
     
 class Flag(SchemaObject):
-    def __init__(self):
+    def __init__(self, value):
         self._schema = None
-        self._contents = None
+        self._contents = value
 
 class ModelObject(SchemaObject):
     def __init__(self):
@@ -159,6 +159,7 @@ class ModelObject(SchemaObject):
         effectiveNames = []
         defs = {}
         ctxs = {}
+        subschemas = {}
         for potentialSchema in schemas:
             ctx = parentcontext
             schemadef = potentialSchema
@@ -170,6 +171,7 @@ class ModelObject(SchemaObject):
             effectiveNames.append(effectiveName)
             defs[effectiveName] = schemadef
             ctxs[effectiveName] = ctx
+            subschemas[effectiveName] = potentialSchema
 
         if schema._schema.name in ['inline-define-field', 'field-reference'] and schema._flags.get('in-xml') == 'UNWRAPPED':
             #need to convert them to markdown
@@ -212,7 +214,14 @@ class ModelObject(SchemaObject):
         while len(arrtogetfrom) > 0 and count < maxOccurs and remNs(arrtogetfrom[0].tag) in effectiveNames:
             count += 1
             gottenName = remNs(arrtogetfrom[0].tag)
-            listOfInstances.append(ModelObject.fromXML(arrtogetfrom.pop(0), defs[gottenName], ctxs[gottenName]))
+            if schema._schema.name == 'choice':
+                #we have collapsed the choice, but we may not have fully analyzed the one we took
+                #e.g. if its max-occurs > 1.
+                #we know that a choice always has max-occurs = 1, though
+                #which means it will return None or the ModelObject directly, not wrapped in a list/group
+                return ModelObject.XMLevalSchema(arrtogetfrom, subschemas[gottenName], ctxs[gottenName])
+            else:
+                listOfInstances.append(ModelObject.fromXML(arrtogetfrom.pop(0), defs[gottenName], ctxs[gottenName]))
         
         toRet = listOfInstances
         if maxOccurs == 1:
@@ -246,7 +255,6 @@ class Field(ModelObject):
         if schema is None:
             raise Exception("grand failure! no schema!")
         elif schema['flags'] is None:
-            schema['flags']
             raise Exception("failure: "+(schema.name or schema.ref)+" does not have iterable flags (not a field?)")
         toRet = Field(xml.text)
         object.__setattr__(toRet, '_schema', schema)
@@ -470,10 +478,18 @@ class Assembly(ModelObject):
                 flagdef = self._context.get(flag['ref'])
             if flagdef['required'] == 'yes' and self[flagdef['name']] is None:
                 return False
+        index = 0
         for sch in self['model']: #6 is the model
             schdef = sch
-            if sch.flags.get('ref') is not None:
-                schdef = self.context.get(flag.flags.get('ref'))
+            if sch.ref is not None:
+                schdef = self.context.get(flag.ref)
+            maxOccurs = schdef._flags.get('max-occurs') or 1
+            if maxOccurs == 'unbounded' or maxOccurs > 1:
+                pass
+            else:
+                if self._contents[index].validate() == False:
+                    return False
+            index = index + 1
         return True
     def _getEffectiveName(self): #called on a schema
         #we can only look for a usename in specific types (global definitions & references)
