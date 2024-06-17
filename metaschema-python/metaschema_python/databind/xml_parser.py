@@ -138,7 +138,7 @@ class XmlParser:
             if value is not None:
                 parsed_flags.append(
                     {
-                        "effective_name": flag_key,
+                        "effective-name": flag_key,
                         "type": "flag",
                         "contents": value,
                     }
