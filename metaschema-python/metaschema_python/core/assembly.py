@@ -175,6 +175,8 @@ class XMLTag:
             tagToAddTo.type = groupName
             self.children.append(tagToAddTo)
 
+        #need to do something about <prose>'s in-xml without wrapper
+
         if grouped:
             if parentjson.get(groupName) is None:
                 if schema.attr.get('min-occurs') is not None and int(schema.attr['min-occurs']) > 0:
@@ -187,7 +189,9 @@ class XMLTag:
                         toAdd.text = element
                         tagToAddTo.children.append(toAdd)
                     else: #schemadef.type = 'define-assembly'
-                        tagToAddTo.children.append(XMLTag.fromJson(element, schemadef, namespace))
+                        toAdd = XMLTag.fromJson(element, schemadef, namespace)
+                        toAdd.type = useName
+                        tagToAddTo.children.append(toAdd)
         else:
             if parentjson.get(useName) is None:
                 if schema.attr.get('min-occurs') is not None and int(schema.attr['min-occurs']) > 0:
@@ -199,7 +203,9 @@ class XMLTag:
                     toAdd.text = parentjson[useName]
                     tagToAddTo.children.append(toAdd)
                 else: #schemadef.type == 'define-assembly'
-                    tagToAddTo.children.append(XMLTag.fromJson(parentjson[useName], schemadef, namespace))
+                    toAdd = XMLTag.fromJson(parentjson[useName], schemadef, namespace)
+                    toAdd.type = useName
+                    tagToAddTo.children.append(toAdd)
     
 class Context:
     def __init__(self, schemapath):
@@ -293,6 +299,9 @@ class Assembly:
             si = si + 1
 
         if si < len(self.schema.children) and self.schema.children[si].type == 'constraint':
+            for constraint in self.schema.children[si].children:
+                if not self.constraintSatisfied(self.node, constraint):
+                    return False
             si = si + 1
         
         if si < len(self.schema.children) and self.schema.children[si].type == 'remarks':
@@ -315,31 +324,11 @@ class Assembly:
                     highestNi = thisni
             ni = highestNi
             return ni
-        elif schema.type == 'assembly' or schema.type == 'field':
-            #reference, get the definition from the namespace
-            schemadef = self.namespace.get(schema.attr['ref'])
-            if schemadef is None:
-                raise Exception("can't find schema definition for "+schema.attr['ref'])
-        elif schema.type == 'define-assembly' or schema.type == 'define-field':
-            #inline definition
-            schemadef = schema
+        schemadef = self.getChildDefinition(schema)
 
         lni = ni #local node index
 
-        wrapped = False
-        wrappedName = ""
-        useName = schemadef.attr['name']
-        for child in schemadef.children:
-            if child.type == 'use-name':
-                useName = child.text
-        #group-as is defined in the reference or in an inline definition, never in a global definition
-        for child in schema.children:
-            if child.type == 'group-as':
-                if child.attr.get('in-xml') == "GROUPED":
-                    wrapped = True #rather than look for the node outlined by the schema definition directly, look for the wrapper first
-                wrappedName = child.attr.get('name')
-            elif child.type == 'use-name': #because this can be given here too!
-                useName = child.text #i do this one later so it will overrule the defined one
+        grouped, groupName, useName = self.getChildGroupingAndNames(schema)
 
         childrenArr = self.node.children
 
@@ -348,7 +337,8 @@ class Assembly:
         if schemadef.attr.get("as-type") == "markup-multiline" and schemadef.attr.get("in-xml") == "UNWRAPPED":
             #htmlElements = ["insert", "b", "i", "em", "strong", "code", "q", "sub", "sup", "img", "a"]
             mumlElements = ["insert", "p", "b", "i", "em", "strong", "code", "q", "sub", "sup", "img", "a", "h1", "h2", "h3", "h4", "h5", "h6", "pre", "ol", "ul", "blockquote", "table"]
-            while lni < len(childrenArr) and childrenArr[lni].type in mumlElements:
+            while lni < len(childrenArr) and (childrenArr[lni].type in mumlElements or childrenArr[lni].type == useName):
+                #it is difficult when reading in a json to remove the <prose> tag, so we should also check for the tag in case it was failed to be removed
                 lni = lni + 1
             return lni #FIXME: hack to fix <prose>
         #maybe instead there should be an array of check-for values, which this replaces with htmlElements or mumlElements?
@@ -363,9 +353,9 @@ class Assembly:
         minOccurs = int(minOccurs)
 
 
-        if wrapped:
-            if ni < len(self.node.children) and self.node.children[ni].type == wrappedName:
-                #this node is the wrapper. we'll interpret it                   may want to remove this oscalns here
+        if grouped:
+            if ni < len(self.node.children) and self.node.children[ni].type == groupName:
+                #this node is the wrapper. we'll interpret it
                 childrenArr = self.node.children[ni].children
                 lni = 0
                 ni = ni + 1
@@ -380,46 +370,80 @@ class Assembly:
         count = 0
         #                                                     you don't actually want to check against name, you want to check against the field use-name
         while lni < len(childrenArr) and count < maxOccurs and childrenArr[lni].type == useName:
-            if schema.type == 'assembly' \
-            and not Assembly(schemadef, childrenArr[lni], self.namespace.parent(schemadef.attr['name'])).validate():
-                #in other words, if it's an invalid assembly of this type
-                print(f"{useName} at {lni} is invalid")
+            if not self.validateChild(schema, childrenArr[lni], str(lni)):
                 return -1
-            elif schema.type == 'define-assembly' \
-            and not Assembly(schemadef, childrenArr[lni], self.namespace, True).validate():
-                #bad inline assembly
-                print(f"{useName} at {lni} is invalid (inline)")
-                return -1
-            elif schema.type == 'field' or schema.type == 'define-field':
-                #check type
-                if schemadef.attr.get('as-type') is None:
-                    t = "string"
-                if schemadef.attr.get('as-type') == "markup-line":
-                    htmlElements = ["insert", "b", "i", "em", "strong", "code", "q", "sub", "sup", "img", "a"]
-                    for child in childrenArr[lni].children:
-                        if not child.type in htmlElements:
-                            return -1
-                elif schemadef.attr.get('as-type') == "markup-multiline":
-                    mumlElements = ["insert", "p", "b", "i", "em", "strong", "code", "q", "sub", "sup", "img", "a", "h1", "h2", "h3", "h4", "h5", "h6", "pre", "ol", "ul", "blockquote", "table"]
-                    for child in childrenArr[lni].children:
-                        if not child.type in mumlElements:
-                            return -1
-                else:
-                    if schemadef.attr.get('as-type') is None:
-                        t = "string"
-                    else:
-                        t = schemadef.attr.get('as-type')
-                    if not Assembly.strMatchesType(childrenArr[lni].text, t):
-                        return -1
             lni = lni + 1
             count = count + 1
         if count < minOccurs: #we did not find enough nodes of this kind
             print("not enough "+useName+"s")
             return -1
-        if wrapped:
+        if grouped:
             return ni #if there was a wrapper, we don't want to return lni because our iterations were not over the parent's children array
         return lni
     
+    def validateChild(self, schema, node, lni="(unknown)"):
+        schemadef = self.getChildDefinition(schema)
+        if schema.type == 'assembly' \
+        and not Assembly(schemadef, node, self.namespace.parent(schemadef.attr['name'])).validate():
+            print(f"{schemadef.attr['name']} at {lni} is invalid")
+            return False
+        elif schema.type == 'define-assembly' \
+        and not Assembly(schemadef, node, self.namespace, True).validate():
+            print(f"{schemadef.attr['name']} at {lni} is invalid (inline)")
+            return False
+        elif schema.type == 'field' or schema.type == 'define-field':
+            return self.validateChildField(schemadef, node)
+        return True
+    
+    def validateChildField(self, schema, node):
+        t = schema.attr.get('as-type')
+        if t is None:
+            t = "string"
+        if t == "markup-line":
+            htmlElements = ["insert", "b", "i", "em", "strong", "code", "q", "sub", "sup", "img", "a"]
+            for child in node.children:
+                if not child.type in htmlElements:
+                    return False
+            return True
+        if t == "markup-multiline":
+            mumlElements = ["insert", "p", "b", "i", "em", "strong", "code", "q", "sub", "sup", "img", "a", "h1", "h2", "h3", "h4", "h5", "h6", "pre", "ol", "ul", "blockquote", "table"]
+            for child in node.children:
+                if not child.type in mumlElements:
+                    return False
+            return True
+        return Assembly.strMatchesType(node.text, t)
+    
+    #either find the global definition of a reference, or return the schema if it's an inline definition
+    def getChildDefinition(self, schema):
+        if schema.type == 'assembly' or schema.type == 'field':
+            #reference, get the definition from the namespace
+            schemadef = self.namespace.get(schema.attr['ref'])
+            if schemadef is None:
+                raise Exception("can't find schema definition for "+schema.attr['ref'])
+        elif schema.type == 'define-assembly' or schema.type == 'define-field':
+            #inline definition
+            schemadef = schema
+        return schemadef
+    
+    def getChildGroupingAndNames(self, schema):
+        schemadef = self.getChildDefinition(schema)
+
+        grouped = False
+        groupName = ""
+        useName = schemadef.attr['name']
+        for child in schemadef.children:
+            if child.type == 'use-name':
+                useName = child.text
+        #group-as is defined in the reference or in an inline definition, never in a global definition
+        for child in schema.children:
+            if child.type == 'group-as':
+                if child.attr.get('in-xml') == "GROUPED":
+                    grouped = True #rather than look for the node outlined by the schema definition directly, look for the wrapper first
+                groupName = child.attr.get('name')
+            elif child.type == 'use-name': #because this can be given here too!
+                useName = child.text #i do this one later so it will overrule the defined one
+        return grouped, groupName, useName
+
     @staticmethod
     def strMatchesType(str, t):
         if t == "dateTime-with-timezone":
@@ -473,6 +497,113 @@ class Assembly:
                 print(f"WARNING: unknown type {t}")
                 overrule = True
         return overrule or bool(re.fullmatch(pattern, str))
+    
+    @staticmethod
+    def constraintSatisfied(base, constraint):
+        if constraint.type == 'allowed-values':
+            if constraint.attr.get('allow-other') == "no":
+                targets = Assembly.evalPath(base, constraint.attr.get('target'))
+                for val in targets:
+                    valAllowed = False
+                    for enum in constraint.children:
+                        if val == enum.attr['value']:
+                            valAllowed = True
+                    if not valAllowed:
+                        return False
+            return True
+        elif constraint.type == 'matches':
+            targets = Assembly.evalPath(base, constraint.attr.get('target'))
+            valid = True
+            for val in targets:
+                if val is not None:
+                    if constraint.attr.get('datatype') is not None:
+                        valid = valid and Assembly.strMatchesType(val, constraint.attr.get('datatype'))
+                    else:
+                        valid = valid and bool(re.fullmatch(constraint.attr.get('regex'), val))
+            return valid
+        elif constraint.type == 'index-has-key':
+            return True
+        elif constraint.type == 'expect':
+            return True
+        elif constraint.type == 'index':
+            return True
+        elif constraint.type == 'is-unique':
+            return True
+        elif constraint.type == 'has-cardinality':
+            return True
+        else:
+            print("unknown constraint type "+constraint.type)
+            return False
+        
+    @staticmethod
+    def evalPath(base, path):
+        if path == '':
+            return base
+        if not isinstance(base, list):
+            base = [base]
+        
+        #              path
+        #name[selector]/remainder
+        name = ""
+        selector = ""
+        remainder = ""
+        nameComplete = False
+        nesting = 0
+        for c in path:
+            if nameComplete:
+                if nesting == 0:
+                    remainder += c
+                else:
+                    if c == '[':
+                        nesting += 1
+                    elif c == ']':
+                        nesting -= 1
+                    selector += c
+            else:
+                if c == '[':
+                    nameComplete = True
+                    nesting += 1
+                    selector += c
+                elif c == '/':
+                    nameComplete = True
+                else:
+                    name += c
+
+        getFrom = []
+        if name == '.':
+            for node in base:
+                getFrom.append(node)
+        elif name[0] == '@':
+            for node in base:
+                getFrom.append(node.attr.get(name[1:]))
+        else:
+            for node in base:
+                for child in node.children:
+                    if child.type == name:
+                        getFrom.append(child)
+        selected = []
+        if selector != '':
+            selector = selector[1:-1]
+            if selector[0] in ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']:
+                selected = [getFrom[int(selector)-1]] #xpath specs say that the first in a list is the [1]th.
+            elif selector.find('=') != -1:
+                for node in getFrom:
+                    matches = False
+                    for s in Assembly.evalPath(node, selector[:selector.find('=')]):
+                        if s == selector[selector.find('=')+1:]:
+                            matches = True
+                    if matches:
+                        selected.append(node)
+            else:
+                for node in getFrom:
+                    if len(Assembly.evalPath(node, selector)) > 0:
+                        selected.append(node)
+        else:
+            selected = getFrom
+        if remainder != '':
+            return Assembly.evalPath(selected, remainder[1:])
+        else:
+            return selected
     
     def __str__(self):
         return str(self.node)
@@ -554,9 +685,22 @@ class Assembly:
     def get(self, key):
         if self.node.attr.get(key) is not None:
             return self.node.attr[key]
-        for child in self.node:
+        for child in self.node.children:
             if child.type == key:
                 return child
+        return None
+    
+    def __getitem__(self, key):
+        return self.evalPath(self.node, key)
+    
+    def set(self, key, value):
+        if self.node.attr.get(key) is not None:
+            self.node.attr[key] = value
+        else:
+            for i in range(0, len(self.node.children)):
+                if self.node.children[i].type == key:
+                    self.node.children[i] = value
+                    
             
 def htmlToMarkup(tagArr):
     toRet = ""
@@ -616,3 +760,21 @@ def htmlToMarkup(tagArr):
             toRet = toRet+f'{tag.text}{htmlToMarkup(tag.children)}\n\n'
         # not gonna do tables yet
     return toRet
+
+class WAssembly:
+    def __init__(self, node, namespace, schemaname):
+        self._asm = Assembly(namespace.get(schemaname), node, namespace, False)
+    def __getattr__(self, name: str):
+        return self._asm.node.attr[name]
+    def __getitem__(self, key):
+        gotten = self._asm[key]
+        for i in range(0, len(gotten)):
+            if len(gotten[i].children) == 0:
+                gotten[i] = gotten[i].text
+        if len(gotten) == 1:
+            gotten = gotten[0]
+        elif len(gotten) == 0:
+            return None
+        return gotten
+    def validate(self):
+        return self._asm.validate()
