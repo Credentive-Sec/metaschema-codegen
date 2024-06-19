@@ -68,6 +68,9 @@ class SchemaObject:
     def __str__(self):
         return self._contents
     def validate(self):
+        if self._contents == None:
+            #FIXME
+            return True
         t = self._schema._flags.get('as-type') or 'string'
         str = self._contents
         if t == "dateTime-with-timezone":
@@ -78,6 +81,7 @@ class SchemaObject:
         overrule = False
         match t:
             case 'string':
+                return True
                 pattern = ".*"
             case 'base64':
                 pattern = "[0-9A-Za-z+/]+={0,2}"
@@ -110,7 +114,7 @@ class SchemaObject:
             case 'positive-integer':
                 pattern = "\\S(.*\\S)?"
             case 'token':
-                pattern = "(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*"
+                pattern = "([a-zA-Z]|_)([a-zA-Z]|[0-9]|[.\\-_])*"#"(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*"
             case 'uri':
                 pattern = "[a-zA-Z][a-zA-Z0-9+\\-.]+:.*\\S"
             case 'uri-reference':
@@ -123,9 +127,13 @@ class SchemaObject:
         return overrule or bool(re.fullmatch(pattern, str))
     
 class Flag(SchemaObject):
-    def __init__(self, value):
-        self._schema = None
+    def __init__(self, value, schema=None, ctx=None):
+        self._schema = schema
         self._contents = value
+        self._context = ctx
+
+    def __eq__(self, value):
+        return self._contents.__eq__(value)
 
 class ModelObject(SchemaObject):
     def __init__(self):
@@ -133,10 +141,22 @@ class ModelObject(SchemaObject):
         object.__setattr__(self, '_context', None)
         object.__setattr__(self, '_schema', None)
     def __getattr__(self, name):
-        return self._flags.get(name)
-        #return self._flags[name]
+        if name in ['_contents', '_context', '_schema', '_flags']:
+            return object.__getattribute__(self, name)
+        if self._flags.get(name) is None and name != 'default': #need to except default because otherwise it recurses infinitely
+            #need to check the schema
+            for flag in self._schema['flags']:
+                if flag._schema.name == 'inline-define-flag' and flag.name == name:
+                    return flag.default or None
+                elif flag._schema.name == 'flag-reference' and flag.ref == name:
+                    return self._context.get(flag.ref).default or None
+            raise KeyError("no flag named "+name+" is present")
+        return self._flags[name]
     def __setattr__(self, name, value):
-        self._flags[name] = value
+        if name in ['_contents', '_context', '_schema', '_flags']:
+            object.__setattr__(self, name, value)
+        else:
+            self._flags[name] = value
     @staticmethod
     def fromXML(xml, schema, context):
         t = schema._schema.name
@@ -150,7 +170,7 @@ class ModelObject(SchemaObject):
             raise Exception("schema is None!")
         elif schema._schema is None:
             raise Exception("no idea what sort of thing this is supposed to be")
-        if schema.name == 'any':
+        if schema._schema.name == 'inline-define-assembly' and schema.name == 'any':
             xmls.clear()
             return [] #FIXME
         schemas = [schema]
@@ -174,6 +194,7 @@ class ModelObject(SchemaObject):
             subschemas[effectiveName] = potentialSchema
 
         if schema._schema.name in ['inline-define-field', 'field-reference'] and schema._flags.get('in-xml') == 'UNWRAPPED':
+            #we don't need to check to see if it's markup-multiline because UNWRAPPED can only be applied to markup-multiline fields
             #need to convert them to markdown
             toRet = Field(Field.convertHTMLtoMarkdown(xmls))
             toRet._setschema(schema)
@@ -242,12 +263,21 @@ class Field(ModelObject):
         object.__setattr__(self, '_contents', value)
         object.__setattr__(self, '_schema', None)
         object.__setattr__(self, '_flags', {})
+        object.__setattr__(self, '_context', None)
     def validate(self):
-        for flag in self._flags:
-            if not flag.validate():
+        for flag in self._schema['flags']:
+            flagdef = flag
+            ctx = self._context
+            if flag._schema.name == 'flag-reference':
+                flagdef = self._context.get(flag.ref)
+                ctx = self._context.parent(flag.ref)
+            if flag.required == 'yes' and self.__getattr__(flagdef.name) is None:
+                return False
+            flagInst = Flag(self.__getattr__(flagdef.name), flagdef, ctx)
+            if not flagInst.validate():
                 return False
         if self._schema._flags.get('as-type') == 'markup-line' or self._schema._flags.get('as-type') == 'markup-multiline':
-            pass
+            return True #FIXME?
         else:
             return super().validate()
     @staticmethod
@@ -466,28 +496,54 @@ class Assembly(ModelObject):
             raise Exception("Assembly cannot validate: Does not know its own schema")
         if self._context == None:
             raise Exception("Assembly cannot validate: No context is set")
-        for flag in self._flags:
-            if not flag.validate():
-                return False
-        for child in self:
-            if not child.validate():
-                return False
-        for flag in self['flags']: #the 5th element in an assembly def is the list of flagrefs/defs
+        for flag in self._schema['flags']: #the 5th element in an assembly def is the list of flagrefs/defs
             flagdef = flag
-            if flag['ref'] is not None:
-                flagdef = self._context.get(flag['ref'])
-            if flagdef['required'] == 'yes' and self[flagdef['name']] is None:
+            ctx = self._context
+            if flag._schema.name == 'flag-reference':
+                flagdef = self._context.get(flag.ref)
+                ctx = self._context.parent(flag.ref)
+            if flag.required == 'yes' and self.__getattr__(flagdef.name) is None:
+                return False
+            flagInst = Flag(self.__getattr__(flagdef.name), flagdef, ctx)
+            if not flagInst.validate():
                 return False
         index = 0
-        for sch in self['model']: #6 is the model
-            schdef = sch
-            if sch.ref is not None:
-                schdef = self.context.get(flag.ref)
-            maxOccurs = schdef._flags.get('max-occurs') or 1
-            if maxOccurs == 'unbounded' or maxOccurs > 1:
-                pass
+        for sch in self._schema['model']: #6 is the model
+            if sch._schema.name == 'choice':
+                #need to evaluate which choice was the one taken
+                #either using discriminator or by trying and checking
+                #or maybe just assume that each element of the choice is one of the options it allows?
+                if isinstance(self[index], list):
+                    for thing in self[index]:
+                        if not thing.validate():
+                            return False
+                else:
+                    if self[index] is not None:
+                        if not self[index].validate():
+                            return False
+                index = index + 1
+                continue
+            #schdef = sch
+            #if sch._schema.name in ['assembly-reference', 'field-reference']:
+            #    schdef = self._context.get(sch.ref)
+            maxOccurs = sch._flags.get('max-occurs') or 1
+            if maxOccurs == 'unbounded':
+                maxOccurs = math.inf
             else:
-                if self._contents[index].validate() == False:
+                maxOccurs = int(maxOccurs)
+            minOccurs = sch._flags.get('min-occurs') or 0
+            minOccurs = int(minOccurs)
+            if maxOccurs > 1:
+                if len(self._contents[index]) > maxOccurs or len(self._contents[index]) < minOccurs:
+                    return False
+                for elem in self._contents[index]:
+                    if not elem.validate():
+                        return False
+            else:
+                if self._contents[index] is None:
+                    if minOccurs > 0:
+                        return False
+                elif self._contents[index].validate() == False:
                     return False
             index = index + 1
         return True
@@ -549,6 +605,9 @@ class MetaschemaContext(Context):
         singleChoice = Assembly()
         singleChoice._setschema(gAsmDef)
 
+        definitionName = Assembly()
+        defaultValue = Assembly()
+
         gAsmDef.name = 'define-assembly'
         gFieldDef.name ='define-field'
         gFlagDef.name = 'define-flag'
@@ -558,6 +617,9 @@ class MetaschemaContext(Context):
         asmRef.name = 'assembly-reference'
         fieldRef.name = 'field-reference'
         flagRef.name = 'flag-reference'
+
+        cardinalityMinOccurs = Assembly()
+        cardinalityMaxOccurs = Assembly()
 
         def iAsmDefInst(name, flags=[], model=[], groupName=None, rq=False, cstrt=[], fn=None, dsc=None,props=[],jskey=None,rmrks=None,ex=[]):
             toRet = Assembly()
@@ -585,7 +647,6 @@ class MetaschemaContext(Context):
             return toRet
 
 
-        definitionName = Assembly()
         definitionName._setschema(iFlagDef)
         definitionName.name = 'name'
         definitionName.required = 'yes'
@@ -593,17 +654,21 @@ class MetaschemaContext(Context):
         definitionReference._setschema(iFlagDef)
         definitionReference.name = 'ref'
         definitionReference.required = 'yes'
-        defaultValue = Assembly()
         defaultValue._setschema(iFlagDef)
         defaultValue.name = 'default'
-        cardinalityMinOccurs = Assembly()
+        defaultValue.default = None
         cardinalityMinOccurs._setschema(iFlagDef)
         cardinalityMinOccurs.name = 'min-occurs'
         cardinalityMinOccurs.default = '0'
-        cardinalityMaxOccurs = Assembly()
         cardinalityMaxOccurs._setschema(iFlagDef)
         cardinalityMaxOccurs.name = 'max-occurs'
         cardinalityMaxOccurs.default = '1'
+
+        requiredFlag = Assembly()
+        requiredFlag._setschema(iFlagDef)
+        requiredFlag.name = 'required'
+        requiredFlag.required = 'no'
+        requiredFlag.default = 'no'
 
         groupAs = Assembly()
 
@@ -859,7 +924,12 @@ class MetaschemaContext(Context):
         flagMatches._setschema(iAsmDef)
         flagMatches.name = 'matches'
         flagMatches._initContents(10)
-        flagMatches['flags'] = [ cstrtId, cstrtSvty, cstrtMatchesRegex, asTypeSimple ]
+        flagMatches['flags'] = [ cstrtId, cstrtSvty, cstrtMatchesRegex, Assembly() ]
+        flagMatches['flags'][3]._setschema(flagRef)
+        flagMatches['flags'][3].ref = 'as-type-simple'
+        flagMatches['flags'][3]._initContents(6)
+        flagMatches['flags'][3][4] = Field('datatype')
+        flagMatches['flags'][3][4]._setschema(usename)
         flagMatches['model'] = [
             formalName,
             description,
@@ -916,7 +986,12 @@ class MetaschemaContext(Context):
         tgMatches._setschema(iAsmDef)
         tgMatches.name = 'matches'
         tgMatches._initContents(10)
-        tgMatches['flags'] = [ cstrtId, cstrtSvty, cstrtMatchesRegex, asTypeSimple, cstrtTg ]
+        tgMatches['flags'] = [ cstrtId, cstrtSvty, cstrtMatchesRegex, Assembly(), cstrtTg ]
+        tgMatches['flags'][3]._setschema(flagRef)
+        tgMatches['flags'][3].ref = 'as-type-simple'
+        tgMatches['flags'][3]._initContents(6)
+        tgMatches['flags'][3][4] = Field('datatype')
+        tgMatches['flags'][3][4]._setschema(usename)
         tgMatches['model'] = [
             formalName,
             description,
@@ -1177,7 +1252,7 @@ class MetaschemaContext(Context):
         iFlagDef.name = 'inline-define-flag'
         iFlagDef._initContents(10)
         iFlagDef[3] = Field('define-flag')
-        iFlagDef[5] = [ definitionName, Assembly(), defaultValue ]
+        iFlagDef[5] = [ definitionName, Assembly(), defaultValue, requiredFlag ]
         iFlagDef[5][1]._setschema(flagRef)
         iFlagDef[5][1].ref = 'as-type-simple'
         iFlagDef[5][1].default = 'string'
@@ -1218,7 +1293,7 @@ class MetaschemaContext(Context):
         flagRef.name = 'flag-reference'
         flagRef._initContents(10)
         flagRef[3] = Field('flag')
-        flagRef[5] = [ definitionReference, cardinalityMinOccurs, cardinalityMaxOccurs ]
+        flagRef[5] = [ definitionReference, cardinalityMinOccurs, cardinalityMaxOccurs, requiredFlag ]
         flagRef[6] = [
             formalName, #field formal-name
             description, #field description
@@ -1295,6 +1370,7 @@ class MetaschemaContext(Context):
         metaschema[5][0].name = "abstract"
         metaschema[5][0]._flags['as-type'] = "token"
         metaschema[5][0].default = "no"
+        metaschema[5][0].required = None
         #metaschema[5][0]['formal-name'] = Field("Is Abstract?")
         metaschema[6] = [
             Assembly(), #define-field schema-name
@@ -1384,8 +1460,6 @@ class MetaschemaContext(Context):
                 elif node._context is None:
                     object.__setattr__(node, '_context', self)
                     if isinstance(node, ModelObject):
-                        #for flag in node._flags:
-                        #    bindToContext(flag)
                         if isinstance(node, Assembly):
                             for thing in node._contents:
                                 bindToContext(thing)
