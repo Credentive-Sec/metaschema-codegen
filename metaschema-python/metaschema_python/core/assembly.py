@@ -3,6 +3,32 @@ from lxml import etree
 import math
 import re
 
+class XmlElem:
+    """
+    A class that represents a pre-processed XML element
+    """
+    def __init__(self, xml):
+        self.tag = XmlElem.strip_namespace(xml.tag)
+        self.text = XmlElem.strip_whitespace(xml.text or '')
+        self.tail = XmlElem.strip_whitespace(xml.tail or '')
+        self.attrib = xml.attrib
+        self.children = []
+        for subxml in list(xml):
+            self.children.append(XmlElem(subxml))
+    def __iter__(self):
+        return self.children.__iter__()
+    @staticmethod
+    def fromDoc(path):
+        parser = etree.XMLParser(load_dtd=True, resolve_entities=True, remove_comments=True)
+        xml_tree = etree.parse(path, parser=parser)
+        return XmlElem(xml_tree.getroot())
+    @staticmethod
+    def strip_namespace(raw_tag: str) -> str:
+        return re.sub(r"{.*}", "", raw_tag)
+    @staticmethod
+    def strip_whitespace(raw_text: str) -> str:
+        return re.sub(r'\s+', ' ', raw_text)
+    
 class Context:
     """
     A context represents a collection of schema definitions. Each context can contain subcontexts which can only reference their subset of definitions.
@@ -24,9 +50,7 @@ class Context:
         if path is not None:
             base_path = Path(Path(path).parent)
             if binding == 'xml':
-                parser = etree.XMLParser(load_dtd=True, resolve_entities=True, remove_comments=True)
-                xml_tree = etree.parse(path, parser=parser)
-                root = Assembly.fromXML(xml_tree.getroot(), metaschema.get("METASCHEMA"), self)
+                root = Assembly.fromXML(XmlElem.fromDoc(path), metaschema.get("METASCHEMA"), self)
 
         METASCHEMA = root
         includes = []
@@ -72,10 +96,7 @@ class Context:
             A copy of the files contents in a pythonic representation, as an Assembly type
         """
         if binding == 'xml':
-            parser = etree.XMLParser(load_dtd=True, resolve_entities=True, remove_comments=True)
-            xml_tree = etree.parse(path, parser=parser)
-            root = xml_tree.getroot()
-            return ModelObject.fromXML(root, self.get(type), self)
+            return ModelObject.fromXML(XmlElem.fromDoc(path), self.get(type), self)
 
 
 class SchemaObject:
@@ -222,10 +243,7 @@ class ModelObject(SchemaObject):
         if schema._schema.name in ['inline-define-field', 'field-reference'] and schema._flags.get('in-xml') == 'UNWRAPPED':
             #we don't need to check to see if it's markup-multiline because UNWRAPPED can only be applied to markup-multiline fields
             #need to convert them to markdown
-            strValue = Field.convertHTMLtoMarkdown(xmls)
-            while len(strValue) > 0 and strValue[-1] in ['\n', ' ']:
-                strValue = strValue[:-1]
-            toRet = Field(strValue)
+            toRet = Field(Field.convertHTMLtoMarkdown(xmls))
             toRet._setschema(schema)
             return toRet
 
@@ -235,18 +253,6 @@ class ModelObject(SchemaObject):
         else:
             maxOccurs = int(maxOccurs)
 
-        def remNs(str):
-            i = 0
-            toRet = ""
-            for c in str:
-                if c == '{':
-                    i = i + 1
-                elif c == '}':
-                    i = i - 1
-                elif i == 0:
-                    toRet = toRet + c
-            return toRet
-
         arrtogetfrom = xmls
         if maxOccurs > 1:
             #we need to find a group-name in case it's grouped in xml
@@ -254,16 +260,16 @@ class ModelObject(SchemaObject):
                 if schema['group-as']._flags.get('in-xml') == 'GROUPED':
                     if len(xmls) == 0:
                         return []
-                    if remNs(xmls[0].tag) == schema['group-as'].name:
-                        arrtogetfrom = list(xmls.pop(0))
+                    if xmls[0].tag == schema['group-as'].name:
+                        arrtogetfrom = xmls.pop(0).children
                     else:
                         return []
 
         count = 0
         listOfInstances = []
-        while len(arrtogetfrom) > 0 and count < maxOccurs and remNs(arrtogetfrom[0].tag) in effectiveNames:
+        while len(arrtogetfrom) > 0 and count < maxOccurs and arrtogetfrom[0].tag in effectiveNames:
             count += 1
-            gottenName = remNs(arrtogetfrom[0].tag)
+            gottenName = arrtogetfrom[0].tag
             if schema._schema.name == 'choice':
                 #we have collapsed the choice, but we may not have fully analyzed the one we took
                 #e.g. if its max-occurs > 1.
@@ -330,7 +336,7 @@ class ModelObject(SchemaObject):
         elif isinstance(self, Field):
             #if we are on a markup-multiline and its unwrapped, we need to dispense with toRet.
             if ref.__getattr__('in-xml') == 'UNWRAPPED':
-                return self._contents
+                return tabs+self._contents+'\n'
             toRet+=f'>{self._contents}</{self._schema._getEffectiveName()}>\n'
         else:
             raise Exception('Cannot convert to XML, is neither field nor assembly')
@@ -387,22 +393,11 @@ class Field(ModelObject):
     @staticmethod
     def convertHTMLtoMarkdown(xmls):
         string = ""
-        def remNs(str):
-            i = 0
-            toRet = ""
-            for c in str:
-                if c == '{':
-                    i = i + 1
-                elif c == '}':
-                    i = i - 1
-                elif i == 0:
-                    toRet = toRet + c
-            return toRet
         
         htmlElements = ['p','em', 'i', 'strong', 'b', 'code', 'q', 'sub', 'sup', 'img', 'a', 'insert', 'h1', 'h2', 'h3', 'h4', 'h5','h6','pre','ol','ul', 'li', 'blockquote', 'table', 'tr', 'th', 'td']
-        while len(xmls) > 0 and remNs(xmls[0].tag) in htmlElements:
+        while len(xmls) > 0 and xmls[0].tag in htmlElements:
             xml = xmls.pop(0)
-            name = remNs(xml.tag)
+            name = xml.tag
             text = xml.text or ''
             tail = xml.tail or ''
             if name == 'i':
@@ -488,7 +483,7 @@ class Assembly(ModelObject):
                 #if it's not required, or there is a default, all is well.
             toRet._flags[effectiveName] = value
 
-        children = list(xml)
+        children = xml.children
         for child in schema['model']:
             if child is None or child._schema is None:
                 raise Exception("bad schema")
