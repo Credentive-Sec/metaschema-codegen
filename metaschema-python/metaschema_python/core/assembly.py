@@ -4,7 +4,17 @@ import math
 import re
 
 class Context:
+    """
+    A context represents a collection of schema definitions. Each context can contain subcontexts which can only reference their subset of definitions.
+    """
     def __init__(self, path: str | Path, binding="xml"):
+        """
+        Read in a file and create a context out of it.
+
+        args:
+            path (str | Path):  The path to the file to read.
+            binding (str):      What kind of file is given. May be 'xml', 'yaml', or 'json'
+        """
         self.types = {}
         self.subspaces = []
 
@@ -51,6 +61,16 @@ class Context:
         return None
     
     def instantiate(self, type, binding, path):
+        """
+        Read in a file of something described by a type in the context.
+
+        args:
+            type (str): The name of what the file contains
+            binding (str): What kind of file is given. May be 'xml', 'yaml', or 'json'
+            path (Path | str): The file to read in
+        returns:
+            A copy of the files contents in a pythonic representation, as an Assembly type
+        """
         if binding == 'xml':
             parser = etree.XMLParser(load_dtd=True, resolve_entities=True, remove_comments=True)
             xml_tree = etree.parse(path, parser=parser)
@@ -59,6 +79,9 @@ class Context:
 
 
 class SchemaObject:
+    """
+    The parent class of all things that schemas describe: Flags, Fields, and Assemblies
+    """
     def __init__(self):
         self._schema = Assembly()
         self._context = None
@@ -81,8 +104,8 @@ class SchemaObject:
         overrule = False
         match t:
             case 'string':
-                return True
                 pattern = ".*"
+                return True
             case 'base64':
                 pattern = "[0-9A-Za-z+/]+={0,2}"
             case 'boolean':
@@ -136,6 +159,9 @@ class Flag(SchemaObject):
         return self._contents.__eq__(value)
 
 class ModelObject(SchemaObject):
+    """
+    An object that can be described in an assembly definition's "model" section, or, in other words, something that can occur as part of an assembly's contents.
+    """
     def __init__(self):
         object.__setattr__(self, '_flags', {})
         object.__setattr__(self, '_context', None)
@@ -196,7 +222,10 @@ class ModelObject(SchemaObject):
         if schema._schema.name in ['inline-define-field', 'field-reference'] and schema._flags.get('in-xml') == 'UNWRAPPED':
             #we don't need to check to see if it's markup-multiline because UNWRAPPED can only be applied to markup-multiline fields
             #need to convert them to markdown
-            toRet = Field(Field.convertHTMLtoMarkdown(xmls))
+            strValue = Field.convertHTMLtoMarkdown(xmls)
+            while len(strValue) > 0 and strValue[-1] in ['\n', ' ']:
+                strValue = strValue[:-1]
+            toRet = Field(strValue)
             toRet._setschema(schema)
             return toRet
 
@@ -255,10 +284,65 @@ class ModelObject(SchemaObject):
     def fromJSON(json, schema, context):
         pass
 
+    def asXML(self, indent=0, ref=None):
+        ref = ref or self._schema
+        tabs = ''
+        tab = '  '
+        for i in range(0, indent):
+            tabs+=tab
+        toRet = tabs+'<'
+        toRet += self._schema._getEffectiveName()
+        for flag in self._flags:
+            toRet+=f' {flag}="{self._flags[flag]}"'
+        
+        if isinstance(self, Assembly):
+            index = 0
+            ctntStr = ''
+            for subschema in self._schema['model']:
+                #these are sure to be assemblies and not lists
+                if subschema._schema.name == 'choice':
+                    #we need to evaluate what the choice taken was to tell what max-occurs value it has
+                    #and if it's greater than 1, we need to know whether there's a wrapper we need to add.
+                    choicenum = subschema._evalChoice(self[index])
+                    subschema = subschema['choices'][choicenum]
+                wrapped = False
+                mo = subschema.__getattr__('max-occurs') or 1
+                mo = math.inf if mo == 'unbounded' else int(mo)
+                if mo > 1:
+                    if subschema['group-as'] is not None:
+                        if subschema['group-as'].__getattr__('in-xml') == 'GROUPED':
+                            wrapped = True
+                    if wrapped and len(self[index]) > 0:
+                        ctntStr += tabs+tab+'<'+subschema['group-as'].name+'>\n'
+                    for expansion in self[index]:
+                        ctntStr += expansion.asXML(indent + (2 if wrapped else 1), self._schema['model'][index])
+                    if wrapped and len(self[index]) > 0:
+                        ctntStr += tabs+tab+'\n<'+subschema['group-as'].name+'>\n'
+                else:
+                    if self[index] is not None:
+                        ctntStr += self[index].asXML(indent+1, self._schema['model'][index])
+                index += 1
+
+            if ctntStr == '':
+                toRet += '/>\n'
+            else:
+                toRet += '>\n'+ctntStr+tabs+'</'+self._schema._getEffectiveName()+'>\n'
+        elif isinstance(self, Field):
+            #if we are on a markup-multiline and its unwrapped, we need to dispense with toRet.
+            if ref.__getattr__('in-xml') == 'UNWRAPPED':
+                return self._contents
+            toRet+=f'>{self._contents}</{self._schema._getEffectiveName()}>\n'
+        else:
+            raise Exception('Cannot convert to XML, is neither field nor assembly')
+        return toRet
+
     def __getitem__(self, key):
         raise Exception("Attempted to dereference a field")
 
 class Field(ModelObject):
+    """
+    A SchemaObject with both flags (thus a ModelObject), and a string value as its contents.
+    """
     def __init__(self, value=None):
         object.__setattr__(self, '_contents', value)
         object.__setattr__(self, '_schema', None)
@@ -347,34 +431,37 @@ class Field(ModelObject):
                 case 'insert':
                     string+='{{ insert: '+xml.attrib['type']+', '+xml.attrib['id-ref']+' }}'+tail
                 case 'h1':
-                    string+='# '+text+'\n'+tail
+                    string+='# '+text+'\\n'+tail
                 case 'h2':
-                    string+='## '+text+'\n'+tail
+                    string+='## '+text+'\\n'+tail
                 case 'h3':
-                    string+='### '+text+'\n'+tail
+                    string+='### '+text+'\\n'+tail
                 case 'h4':
-                    string+='#### '+text+'\n'+tail
+                    string+='#### '+text+'\\n'+tail
                 case 'h5':
-                    string+='##### '+text+'\n'+tail
+                    string+='##### '+text+'\\n'+tail
                 case 'h6':
-                    string+='###### '+text+'\n'+tail
+                    string+='###### '+text+'\\n'+tail
                 case 'pre':
-                    string+='\n```\n'+text+'\n```\n'+tail
+                    string+='\\n```\\n'+text+'\\n```\\n'+tail
                 case 'ol':
                     index = 0
                     for subelement in xml:
                         index = index + 1
-                        string+=str(index)+'. '+subelement.text+'\n'
+                        string+=str(index)+'. '+subelement.text+'\\n'
                     string+=tail
                 case 'ul':
                     for subelement in xml:
-                        string+='- '+subelement.text+'\n'
+                        string+='- '+subelement.text+'\\n'
                     string+=tail
                 case 'blockquote':
-                    string+='> '+text+'\n'+tail
+                    string+='> '+text+'\\n'+tail
         return string
 
 class Assembly(ModelObject):
+    """
+    A SchemaObject with flags (hence a ModelObject) and any number of other SchemaObjects as its contents.
+    """
     _contents: list[ModelObject]
     _context: Context
     def __init__(self):
@@ -557,15 +644,39 @@ class Assembly(ModelObject):
             if schdef['use-name'] is not None:
                 return schdef['use-name']._contents
             if schdef.name is None:
-                print("bweh")
+                raise Exception("bad schema")
             return schdef.name
             #we only need to check in this if, because everywhere else schdef = self and was checked already
         if self.name is None:
-            print("bweh")
+            raise Exception("bad schema")
         return self.name
     def _initContents(self, num):
         for i in range(0, num):
             self._contents.append(None)
+    def _evalChoice(self, instance): #to be called on a choice
+        index = 0
+        for option in self['choices']:
+            optionName = ''
+            if option._schema.name in ['assembly-reference', 'field-reference']:
+                optionName = option.ref
+            else:
+                optionName = option.name
+            mo = option.__getattr__('max-occurs') or 1
+            mo = math.inf if mo == 'unbounded' else int(mo)
+            if mo > 1 and isinstance(instance, list):
+                if len(instance) > 0 and instance[0]._schema.name == optionName:
+                    return index
+                elif int(option.__getattr__('min-occurs') or 0) == 0:
+                    #there is nothing in the list, and this option lets you have nothing
+                    #this option will do just fine, in that case
+                    return index
+            elif mo == 1 and isinstance(instance, SchemaObject):
+                if instance._schema.name == optionName:
+                    return index
+            elif mo == 1 and instance == None and int(option.__getattr__('min-occurs') or 0) == 0:
+                return index
+            index += 1
+        raise Exception("no valid option in choice!")
 
 #we can't read a metaschema without some knowledge of what the schema is
 #the schema for metaschema itself is no exception
