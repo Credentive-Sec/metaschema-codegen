@@ -349,6 +349,48 @@ class ModelObject(SchemaObject):
         else:
             raise Exception('Cannot convert to XML, is neither field nor assembly')
         return toRet
+    
+    def asJSON(self, indent=0):
+        if isinstance(self, Field):
+            #FIXME: need to check if it's the kind that has flags!
+            return '"'+self._contents+'"'
+        else: #assembly
+            tabs = ''
+            tab = '  '
+            for i in range(0, indent):
+                tabs += tab
+            toRet = '{\n'
+            for flag in self._flags:
+                toRet += f'{tabs}{tab}"{flag}":"{self._flags[flag]}",\n'
+            index = 0
+            for index in range(0, len(self._schema['model'])):
+                child = self[index]
+                childsch = self._schema['model'][index]
+                if childsch._schema.name == 'choice':
+                    childsch = childsch['choices'][childsch._evalChoice(child)]
+                mo = childsch._flags.get('max-occurs') or 1
+                mo = math.inf if mo == 'unbounded' else int(mo)
+                if mo > 1:
+                    if len(child) == 1 and childsch['group-as']._flags['in-json'] == 'SINGLETON_OR_ARRAY':
+                        toRet += f'{tabs}{tab}"{childsch._getEffectiveName()}":'
+                        toRet += child[0].asJson(indent+1)
+                        toRet += ',\n'
+                    elif len(child) > 0:
+                        #array
+                        toRet += f'{tabs}{tab}"{childsch["group-as"].name}":[\n'
+                        for item in child:
+                            toRet += tabs+tab+tab+item.asJSON(indent+2) + ',\n'
+                        toRet += f'{tabs}{tab}],\n'
+                elif child is not None: 
+                    #singleton
+                    toRet += f'{tabs}{tab}"{childsch._getEffectiveName()}":'
+                    toRet += child.asJSON(indent+1)
+                    toRet += ',\n'
+            
+            toRet = toRet[:-2] #lop off a final ',\n'
+            toRet+= '\n' + tabs + '}'
+            return toRet
+
 
     def __getitem__(self, key):
         raise Exception("Attempted to dereference a field")
@@ -402,6 +444,9 @@ class Field(ModelObject):
     def fromJSON(json, schema, context):
         if schema is None:
             raise Exception("Cannot parse JSON: no schema given")
+        #FIXME: needs to check for flags!
+        if len(json['contents']) > 1:
+            raise Exception("more than jsut text in field")
         toRet = Field(json['contents'][0])
         object.__setattr__(toRet, '_schema', schema)
         object.__setattr__(toRet, '_context', context)
