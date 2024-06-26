@@ -2,6 +2,7 @@ from pathlib import Path
 from lxml import etree
 import math
 import re
+from ..databind.json_parser import JsonParser
 
 class XmlElem:
     """
@@ -97,6 +98,8 @@ class Context:
         """
         if binding == 'xml':
             return ModelObject.fromXML(XmlElem.fromDoc(path), self.get(type), self)
+        elif binding == 'json':
+            return ModelObject.fromJSON(JsonParser(path).raw_data[0], self.get(type), self)
 
 
 class SchemaObject:
@@ -212,6 +215,13 @@ class ModelObject(SchemaObject):
         else:
             return Assembly.fromXML(xml, schema, context)
     @staticmethod
+    def fromJSON(json, schema, context):
+        t = schema._schema.name
+        if t == 'inline-define-field' or t == 'define-field':
+            return Field.fromJSON(json, schema, context)
+        else:
+            return Assembly.fromJSON(json, schema, context)
+    @staticmethod
     def XMLevalSchema(xmls, schema, parentcontext):
         if schema is None:
             raise Exception("schema is None!")
@@ -286,9 +296,6 @@ class ModelObject(SchemaObject):
             else:
                 toRet = listOfInstances[0]
         return toRet
-    @staticmethod
-    def fromJSON(json, schema, context):
-        pass
 
     def asXML(self, indent=0, ref=None):
         ref = ref or self._schema
@@ -297,9 +304,10 @@ class ModelObject(SchemaObject):
         for i in range(0, indent):
             tabs+=tab
         toRet = tabs+'<'
-        toRet += self._schema._getEffectiveName()
+        toRet += ref._getEffectiveName()
         for flag in self._flags:
-            toRet+=f' {flag}="{self._flags[flag]}"'
+            if self._flags[flag] is not None:
+                toRet+=f' {flag}="{self._flags[flag]}"'
         
         if isinstance(self, Assembly):
             index = 0
@@ -321,23 +329,23 @@ class ModelObject(SchemaObject):
                     if wrapped and len(self[index]) > 0:
                         ctntStr += tabs+tab+'<'+subschema['group-as'].name+'>\n'
                     for expansion in self[index]:
-                        ctntStr += expansion.asXML(indent + (2 if wrapped else 1), self._schema['model'][index])
+                        ctntStr += expansion.asXML(indent + (2 if wrapped else 1), subschema)
                     if wrapped and len(self[index]) > 0:
                         ctntStr += tabs+tab+'\n<'+subschema['group-as'].name+'>\n'
                 else:
                     if self[index] is not None:
-                        ctntStr += self[index].asXML(indent+1, self._schema['model'][index])
+                        ctntStr += self[index].asXML(indent+1, subschema)
                 index += 1
 
             if ctntStr == '':
                 toRet += '/>\n'
             else:
-                toRet += '>\n'+ctntStr+tabs+'</'+self._schema._getEffectiveName()+'>\n'
+                toRet += '>\n'+ctntStr+tabs+'</'+ref._getEffectiveName()+'>\n'
         elif isinstance(self, Field):
             #if we are on a markup-multiline and its unwrapped, we need to dispense with toRet.
             if ref.__getattr__('in-xml') == 'UNWRAPPED':
                 return tabs+self._contents+'\n'
-            toRet+=f'>{self._contents}</{self._schema._getEffectiveName()}>\n'
+            toRet+=f'>{self._contents}</{ref._getEffectiveName()}>\n'
         else:
             raise Exception('Cannot convert to XML, is neither field nor assembly')
         return toRet
@@ -389,6 +397,14 @@ class Field(ModelObject):
                 if flag.required == 'yes' and flagdef.default is None:
                     pass #THROW ERROR!!!
             toRet._flags[effectiveName] = value
+        return toRet
+    @staticmethod
+    def fromJSON(json, schema, context):
+        if schema is None:
+            raise Exception("Cannot parse JSON: no schema given")
+        toRet = Field(json['contents'][0])
+        object.__setattr__(toRet, '_schema', schema)
+        object.__setattr__(toRet, '_context', context)
         return toRet
     @staticmethod
     def convertHTMLtoMarkdown(xmls):
@@ -492,12 +508,62 @@ class Assembly(ModelObject):
             print("WARNING: remaining unparsed children")
             #print(f"(could not parse past {children[0].tag} type)")
         return toRet
-
-
-
     @staticmethod
-    def fromJSON(json):
-        pass
+    def fromJSON(json, schema, context: Context):
+        toRet = Assembly()
+        object.__setattr__(toRet, '_schema', schema)
+        object.__setattr__(toRet, '_context', context)
+        for flag in schema['flags']:
+            flagdef = flag
+            if flag._schema.name == 'flag-reference':
+                flagdef = context.get(flag.ref)
+                if flagdef == None:
+                    raise Exception('could not find flag definition for '+flag.ref)
+            effectiveName = flag._getEffectiveName()
+            value = None
+            for item in json['contents']:
+                if item.get('effective-name') == effectiveName:
+                    if len(item.get('contents')) > 0:
+                        value = item.get('contents')[0]
+            if value is None:
+                if flag.required == 'yes' and flagdef.default is None:
+                    raise Exception('required flag ('+effectiveName+') is not present')
+            toRet._flags[effectiveName] = value
+        
+        for child in schema['model']:
+            if child is None or child._schema is None:
+                raise Exception('bad schema')
+            toAdd = None
+
+            schemas = [child]
+            if child._schema.name == 'choice':
+                schemas = child[0]
+            for sch in schemas:
+                childdef = sch
+                subctxt = context
+                if sch._schema.name in ['assembly-reference', 'field-reference']:
+                    childdef = context.get(sch.ref)
+                    subctxt = context.parent(sch.ref)
+                namesToLookFor = [sch._getEffectiveName()]
+                mo = sch._flags['max-occurs'] or 1
+                mo = math.inf if mo == 'unbounded' else int(mo)
+                if mo > 1:
+                    namesToLookFor.append(sch['group-as'].name)
+                    toAdd = []
+                foundOne = False
+                for item in json['contents']:
+                    if item.get('effective-name') in namesToLookFor or item.get('group-as-name') in namesToLookFor:
+                        foundOne = True
+                        interpreted = ModelObject.fromJSON(item, childdef, subctxt)
+                        if mo > 1:
+                            toAdd.append(interpreted)
+                        else:
+                            toAdd = interpreted
+                if foundOne:
+                    break
+            toRet._contents.append(toAdd)
+            
+        return toRet
     def _nameToIndex(self, name):
         #code will recurse infinitely if we do not give hard definitions to anchor some types down
         #without these define-assembly will call this function on inline-define-assembly for the name 'model'
