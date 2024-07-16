@@ -1,8 +1,9 @@
 import argparse
 import sys
 
-from .core.metaschema_parser import MetaschemaParser
-from .core.assembly import Context
+from .core.schemaparse import MetaschemaParser
+
+# from .core.assembly import Context
 
 
 # Parse the command arguments
@@ -33,20 +34,20 @@ args = parser.parse_args()
 
 # Parse all of the metaschema definitions into trees.
 try:
-    metaschema_parser = MetaschemaParser(
-        location=args.location,
-        schema_file="/workspaces/metaschema-python/metaschema/schema/xml/metaschema.xsd",
-    )
-    metaschema_contents = metaschema_parser.parse()
-
-
+    metaschema_dict = MetaschemaParser.parse(metaschema_location=args.location)
 except Exception as e:
     print("Error parsing metaschema:", e)
     sys.exit(1)
 
-ctxt = Context("/workspaces/metaschema-python/OSCAL/src/metaschema/oscal_complete_metaschema.xml")
-asm = ctxt.instantiate('catalog', 'xml', '/workspaces/metaschema-python/oscal-content/nist.gov/SP800-53/rev5/xml/NIST_SP-800-53_rev5_catalog.xml')
+# ctxt = Context(
+#     "/workspaces/metaschema-python/OSCAL/src/metaschema/oscal_complete_metaschema.xml"
+# )
+# asm = ctxt.instantiate(
+#     "catalog",
+#     "xml",
+#     "/workspaces/metaschema-python/oscal-content/nist.gov/SP800-53/rev5/xml/NIST_SP-800-53_rev5_catalog.xml",
+# )
 
-#print(asm.validate())
+# print(asm.validate())
 
 print("finished")
