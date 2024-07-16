@@ -1,7 +1,9 @@
 import jinja2
+from typing import TypeAlias
 
-from ..shared_types import SchemaID
 from ..core.schemaparse import MetaSchema
+
+GlobalsDictType: TypeAlias = dict[str, dict[str, str]]
 
 
 class PackageGenerator:
@@ -10,18 +12,22 @@ class PackageGenerator:
     metaschemas present in the dictionary.
     """
 
-    def __init__(self, parsed_metaschemas: dict[SchemaID, MetaSchema]) -> None:
-        globals: dict[str, list[str, str]] = {}
+    def __init__(self, parsed_metaschemas: dict[str, MetaSchema]) -> None:
+        # globals dict captures all the globals, the outer key is the module file name,
+        # inner dict contains the output of Metaschema.get_globals()
+        globals: GlobalsDictType = {}
         classes: list[ClassGenerator] = []
-        schema_id_list = list(parsed_metaschemas.keys())
         # We parse in two passes. First we extract all the globals, then we call ClassGenerator on each class,
         # passing the globals as an argument
+        for file, schema in parsed_metaschemas.items():
+            globals[file] = schema.get_globals()
 
+        # Next, we parse the metaschemas, passing in the globals dict
         for metaschema in parsed_metaschemas.values():
             classes.append(
                 ClassGenerator(
                     metaschema=metaschema,
-                    schema_file2name_map=schema_id_list,
+                    globals=globals,
                 )
             )
 
@@ -40,9 +46,7 @@ class ClassGenerator:
     A class to generate python source code from a parsed metaschema
     """
 
-    def __init__(
-        self, metaschema: MetaSchema, schema_file2name_map: list[SchemaID]
-    ) -> None:
+    def __init__(self, metaschema: MetaSchema, globals: GlobalsDictType) -> None:
         self.metaschema_dict = metaschema
         self.version = metaschema["schema-version"]
         self.package_name = metaschema["short-name"]
@@ -50,10 +54,13 @@ class ClassGenerator:
         self.fields = []
         self.flags = []
 
+        imported_globals: GlobalsDictType = {}
+
         # TODO: check the "import" for items with scope "global" or no scope (global is the default) - add them to the list of assemblies that can be referenced
         for sub_schema in self.metaschema_dict.get("import", []):
-            # process imports and add the globals as available to import - assume that our naming scheme will be consistent
-            schema_key = sub_schema.get("@href")
+            # Create subset of globals that are relevant to our scope
+            import_filename = sub_schema.get("@href")
+            imported_globals[import_filename] = globals[import_filename]
 
         # TODO: parse out definitions of fields, flags and assemblies
         for assembly in self.metaschema_dict["define-assembly"]:
@@ -69,6 +76,11 @@ class ClassGenerator:
 
         # TODO: iterate through definitions and pass them to the appropriate jinja templates. for "@ref", include an import and reference. check global imports.
 
+    def _generate_assembly(self, assembly_dict) -> str:
+        assembly_class = ""
+        # Parse assembly data, pass to jinja template and return generated string
+        return assembly_class
+
     def _generate_flag(self, flag_dict) -> str:
         flag_class = ""
         # Parse flag data, pass to jinja template and return generated string
@@ -78,11 +90,6 @@ class ClassGenerator:
         field_class = ""
         # Parse flag data, pass to jinja template and return generated string
         return field_class
-
-    def _generate_assembly(self, assembly_dict) -> str:
-        assembly_class = ""
-        # Parse assembly data, pass to jinja template and return generated string
-        return assembly_class
 
     def _generate_constraint(self, constraint_dict) -> str:
         constraint_class = ""

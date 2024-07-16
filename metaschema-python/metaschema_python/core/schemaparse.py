@@ -9,13 +9,13 @@ from pathlib import Path
 from typing import cast, Iterator
 import logging
 
-from ..shared_types import SchemaID, SchemaPath
+from ..shared_types import SchemaPath
 
 logging.basicConfig(level=logging.DEBUG)
 
-# Module variable for tracking files we've imported -
+# Module variable for tracking files we've already imported
 _import_tracker: list[str] = []
-_metaschema_list: list[MetaSchema] = []
+_metaschema_dict = {}
 
 
 class MetaschemaParser:
@@ -33,7 +33,7 @@ class MetaschemaParser:
         schema_base_url: (
             str | None
         ) = "https://raw.githubusercontent.com/usnistgov/metaschema/main/schema/xml/",
-    ) -> list[MetaSchema]:
+    ) -> dict[str, MetaSchema]:
         """
         This static method accepts a str or Path object representing a URL or file path.
         It parses the contents of the file or URL and returns a dictionary representing
@@ -63,6 +63,7 @@ class MetaschemaParser:
             str(metaschema_location)
         )
         metaschema = MetaSchema(metaschema=metaschema_location, schema_xsd=ms_schema)
+        _metaschema_dict[metaschema_path["name"]] = metaschema
 
         # Keep a list of the files we've processed so we don't parse something twice. References module variable so that it's readable by all instances
         _import_tracker.append(Path(metaschema_location).name)
@@ -77,8 +78,6 @@ class MetaschemaParser:
                     schema_location=schema_location,
                     schema_base_url=schema_base_url,
                 )
-
-        _metaschema_list.append(metaschema)
 
         return _metaschema_dict
 
