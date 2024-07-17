@@ -6,16 +6,42 @@ from urllib import request, parse
 import xmlschema
 from lxml import etree
 from pathlib import Path
-from typing import cast, Iterator
+from typing import cast, Iterator, TypedDict
 import logging
-
-from ..shared_types import SchemaPath
+import re
+import dataclasses
 
 logging.basicConfig(level=logging.DEBUG)
 
-# Module variable for tracking files we've already imported
-_import_tracker: list[str] = []
-_metaschema_dict = {}
+
+# Simple utility classes to simplify data passing
+
+
+@dataclasses.dataclass
+class DataType:
+    name: str
+    base_type: str
+    description: list[str]
+    pattern: re.Pattern | None
+
+
+@dataclasses.dataclass
+class MetaSchemaSet:
+    base_path: Path
+    datatypes: list[DataType] = dataclasses.field(default_factory=list)
+    metaschemas: list[MetaSchema] = dataclasses.field(default_factory=list)
+
+
+@dataclasses.dataclass
+class SchemaPath:
+    base: Path
+    name: str
+
+
+@dataclasses.dataclass
+class GlobalElement:
+    schema: str
+    element: str
 
 
 class MetaschemaParser:
@@ -33,7 +59,9 @@ class MetaschemaParser:
         schema_base_url: (
             str | None
         ) = "https://raw.githubusercontent.com/usnistgov/metaschema/main/schema/xml/",
-    ) -> dict[str, MetaSchema]:
+        # The following optionals are used for recursive calls
+        metaschema_set: MetaSchemaSet | None = None,
+    ) -> MetaSchemaSet:
         """
         This static method accepts a str or Path object representing a URL or file path.
         It parses the contents of the file or URL and returns a dictionary representing
@@ -59,27 +87,87 @@ class MetaschemaParser:
         xsd_contents = request.urlopen(schema_location).read()
         ms_schema = xmlschema.XMLSchema(source=xsd_contents, base_url=schema_base_url)
 
-        metaschema_path = MetaschemaParser._normalize_input_path(
-            str(metaschema_location)
-        )
-        metaschema = MetaSchema(metaschema=metaschema_location, schema_xsd=ms_schema)
-        _metaschema_dict[metaschema_path["name"]] = metaschema
+        # First time we're called, metaschema_set isn't defined yet.
+        # TODO - clean up this logic, it's a mess
+        if metaschema_set is None:
+            metaschema_path = MetaschemaParser._process_input_path(
+                str(metaschema_location)
+            )
+            metaschema_set = MetaSchemaSet(base_path=metaschema_path.base)
+            # Parse datatypes
+            metaschema_set.datatypes = MetaschemaParser._parse_data_types(ms_schema)
+        else:
+            metaschema_path = SchemaPath(
+                base=metaschema_set.base_path, name=str(metaschema_location)
+            )
 
-        # Keep a list of the files we've processed so we don't parse something twice. References module variable so that it's readable by all instances
-        _import_tracker.append(Path(metaschema_location).name)
+        metaschema = MetaSchema(
+            file=metaschema_path.name,
+            basepath=Path(metaschema_path.base),
+            schema_xsd=ms_schema,
+        )
+        metaschema_set.metaschemas.append(metaschema)
 
         for sub_schema in MetaschemaParser._get_imports(metaschema):
-            if sub_schema not in _import_tracker:
+            if sub_schema not in [
+                metaschema.file for metaschema in metaschema_set.metaschemas
+            ]:
                 MetaschemaParser.parse(
-                    metaschema_location=Path(metaschema_path["base"], sub_schema),
+                    metaschema_location=sub_schema,
                     base_url=base_url,
-                    base_path=base_path,
+                    base_path=metaschema_path.base,
                     chase_imports=chase_imports,
                     schema_location=schema_location,
                     schema_base_url=schema_base_url,
+                    metaschema_set=metaschema_set,
                 )
 
-        return _metaschema_dict
+        return metaschema_set
+
+    @staticmethod
+    def _parse_data_types(schema: xmlschema.XMLSchema) -> list[DataType]:
+        datatypes: list[DataType] = []
+
+        for datatype in schema.simple_types:
+
+            if datatype.local_name is not None:
+                dt_name = datatype.local_name
+            else:
+                # This will never fire because metaschema always defines a base class
+                dt_name = ""
+
+            if (
+                datatype.base_type is not None
+                and datatype.base_type.local_name is not None
+            ):
+                dt_base = datatype.base_type.local_name
+            else:
+                # This will never fire because metaschema always defines a base class
+                dt_base = ""
+
+            dt_descriptions = []
+            for annotation in datatype.annotations:
+                # Strip out newlines and tabs
+                dt_descriptions.append(
+                    str(annotation).replace("\n", "").replace("\t", "")
+                )
+
+            if datatype.patterns is not None:
+                # Hack here - we know that metaschema only has a single pattern per datatype
+                dt_pattern = datatype.patterns.patterns[0]
+            else:
+                dt_pattern = None
+
+            datatypes.append(
+                DataType(
+                    name=dt_name,
+                    base_type=dt_base,
+                    description=dt_descriptions,
+                    pattern=dt_pattern,
+                )
+            )
+
+        return datatypes
 
     @staticmethod
     def _get_imports(schema: MetaSchema) -> list[str]:
@@ -92,7 +180,7 @@ class MetaschemaParser:
         return schema_list
 
     @staticmethod
-    def _normalize_input_path(input_path: str) -> SchemaPath:
+    def _process_input_path(input_path: str) -> SchemaPath:
         """
         This function takes the file path string or URL provided to the initializer, validates it and returns the base path or base url and the file name.
         It raises an error if it cannot process the path. Called by the initializer.
@@ -108,10 +196,16 @@ class MetaschemaParser:
             print("Error parsing provided baseurl")
             raise e
 
-        path = Path(base_url_parts.path)
-
-        base_path = str(path.parent)
-        file = path.name
+        if base_url_parts.scheme == "":
+            # This is a file path
+            path = Path(input_path)
+            base_path = path.parent
+            if not base_path.is_absolute():
+                base_path.resolve()
+            file = path.name
+        else:
+            # This is URL
+            pass
 
         return SchemaPath(base=base_path, name=file)
 
@@ -123,7 +217,7 @@ class MetaSchema(collections.abc.Mapping):
 
     def __init__(
         self,
-        metaschema: str | Path,
+        file: str | Path,
         schema_xsd: xmlschema.XMLSchema,
         baseurl: str | None = None,
         basepath: Path | None = None,
@@ -132,18 +226,30 @@ class MetaSchema(collections.abc.Mapping):
         Initializer for a MetaSchema instance
 
         Args:
-            metaschema (str | Path): A string representing a file or url, or a Path representing a local file.
+            file (str | Path): A string representing a file or url, or a Path representing a local file.
+            schema_xsd (xmlschema.XMLSchema): A parsed xml schema which can be passed in to prevent the same xsd from being parsed multiple times
             baseurl (str | None, optional): A base URL which will be used to import additional referenced metaschema files if obtained from a remote location. Defaults to None.
             basepath (pathlib.Path | None, optional): A base URL which will be used to import additional referenced metaschema files if obtained from a local re. Defaults to None.
         """
         # TODO: process URLs or local paths - consider reading the bytes and passing them to etree instead of a file location
-        metaschema_file = metaschema
+        self.file = file
+
+        # If we were passed a basepath, try to construct a location from it
+        if basepath is not None:
+            location = basepath.joinpath(file)
+        else:
+            location = Path(file)
+
+        # Parse the file
         parser = etree.XMLParser(resolve_entities=True)
-        metaschema_etree = etree.parse(metaschema_file, parser=parser)
+        metaschema_etree = etree.parse(location, parser=parser)
+
+        # Extract the relevant data from the etree
         self.schema_dict = cast(
             dict, schema_xsd.to_dict(cast(xmlschema.XMLResource, metaschema_etree))
-        )
-        self.module_name = cast(str, self.schema_dict["short-name"]).replace("-", "_")
+        )  # cast doesn't do anything, just shuts up the type checker
+        self.short_name = cast(str, self.schema_dict["short-name"])
+        self.globals = self.get_globals()
 
     def _read_local_schema(
         self, metaschema: str | Path, basepath: Path | None = None
@@ -158,42 +264,42 @@ class MetaSchema(collections.abc.Mapping):
     def _read_remote_schema(self, baseurl: str, metaschema: str) -> str:
         return ""
 
-    def get_globals(self) -> dict[str, str]:
+    def get_globals(self) -> list[str]:
         """
-        Returns the global symbols defined in this metaschema, for "import" in metaschemas that reference this
+        Returns the global symbols defined in this metaschema, for "import" in metaschemas that reference this schema
         """
-        globals = {}
+        globals = []
 
         # return empty list if key does not exist
         for assembly in self.schema_dict.get("define-assembly", []):
             if assembly.get("@scope") != "local":
-                globals[assembly["@name"]] = self._get_class_name(
-                    assembly["formal-name"]
-                )
+                globals.append(assembly["formal-name"])
         # return empty list if key does not exist
         for field in self.schema_dict.get("define-field", []):
             if field.get("@scope") != "local":
-                globals[field["@name"]] = self._get_class_name(field["formal-name"])
+                globals.append(field["formal-name"])
         # return empty list if key does not exist
         for flag in self.schema_dict.get("define-flag", []):
             if flag.get("@scope") != "local":
-                globals[flag["@name"]] = self._get_class_name(flag["formal-name"])
+                globals.append(flag["formal-name"])
 
         return globals
 
-    def _get_class_name(self, instance: str) -> str:
-        """
-        Returns the name of the Class that will instantiate a defined assembly, field or flag in a module.
-        This is provided to ensure consistent names whether the class is being passed to a template, or
-        the whether it is being used to support returning the global symbol for import into another module
-        """
-        # Strip strings, preserve case
-        return f'{self.module_name}.{instance.replace(" ", "")}'
+    def _get_imports(self) -> list[str]:
+        import_list = []
+        if "import" in self.schema_dict.keys() and isinstance(
+            self.schema_dict["import"], list
+        ):
+            for item in self.schema_dict["import"]:
+                if isinstance(item, dict) and "@href" in item.keys():
+                    import_list.append(item.get("@href"))
+
+        return import_list
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.schema_dict})"
 
-    ## Mapping ABC classes - turns this into a dict-like object
+    ## implementing abstract classes to turn this into a dict-like object
     def __getitem__(self, key: str) -> str | dict[str, str]:
         if isinstance(self.schema_dict, dict):
             return self.schema_dict.__getitem__(key)
