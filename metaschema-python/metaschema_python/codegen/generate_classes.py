@@ -1,9 +1,16 @@
 import jinja2
 from typing import TypeAlias
 
-from ..core.schemaparse import MetaSchema
+from ..core.schemaparse import MetaSchemaSet
 
-GlobalsDictType: TypeAlias = dict[str, dict[str, str]]
+
+def _get_class_name(instance: str) -> str:
+    """
+    Returns the name of the Class that will instantiate a defined assembly, field or flag in a module.
+    This is provided to ensure consistent names when translating from fields to anything else
+    """
+    # Strip spaces, convert dashes to underscores
+    return f'{instance.replace(" ", "").replace("-","_")}'
 
 
 class PackageGenerator:
@@ -12,24 +19,31 @@ class PackageGenerator:
     metaschemas present in the dictionary.
     """
 
-    def __init__(self, parsed_metaschemas: dict[str, MetaSchema]) -> None:
-        # globals dict captures all the globals, the outer key is the module file name,
-        # inner dict contains the output of Metaschema.get_globals()
-        globals: GlobalsDictType = {}
-        classes: list[ClassGenerator] = []
-        # We parse in two passes. First we extract all the globals, then we call ClassGenerator on each class,
-        # passing the globals as an argument
-        for file, schema in parsed_metaschemas.items():
-            globals[file] = schema.get_globals()
+    def __init__(self, parsed_metaschemas: MetaSchemaSet) -> None:
+        self.classes: list[ModuleGenerator] = []
+
+        # We process this in two passes. First we extract all the globals from all the items in the MetaSchemaSet,
+        # then we call ClassGenerator on each class
+        self.globals: dict[str, list[str]] = {}
+
+        for metaschema in parsed_metaschemas.metaschemas:
+            
 
         # Next, we parse the metaschemas, passing in the globals dict
         for metaschema in parsed_metaschemas.values():
-            classes.append(
-                ClassGenerator(
+            self.classes.append(
+                ModuleGenerator(
                     metaschema=metaschema,
-                    globals=globals,
+                    globals=self.globals,
                 )
             )
+
+    # TODO: create a directory corresponding the the metaschema namespace (top level assembly "root-name") (makes a python package)
+    def write_package(self) -> None:
+        """
+        Writes all the files in the package to files at a location provided
+        """
+        pass
 
 
 class Document:
@@ -41,44 +55,69 @@ class Document:
     root_elements: list[str]
 
 
-class ClassGenerator:
+class ModuleGenerator:
     """
     A class to generate python source code from a parsed metaschema
     """
 
-    def __init__(self, metaschema: MetaSchema, globals: GlobalsDictType) -> None:
+    def __init__(self, metaschema: MetaSchemaSet) -> None:
         self.metaschema_dict = metaschema
         self.version = metaschema["schema-version"]
-        self.package_name = metaschema["short-name"]
+        self.module_name = metaschema["short-name"]
         self.assemblies = []
         self.fields = []
         self.flags = []
-
-        imported_globals: GlobalsDictType = {}
+        self.imported_globals: GlobalsDictType = {}
+        self.local_methods: dict[str, str] = {}
 
         # TODO: check the "import" for items with scope "global" or no scope (global is the default) - add them to the list of assemblies that can be referenced
         for sub_schema in self.metaschema_dict.get("import", []):
             # Create subset of globals that are relevant to our scope
             import_filename = sub_schema.get("@href")
-            imported_globals[import_filename] = globals[import_filename]
+            self.imported_globals[import_filename] = globals[import_filename]
 
         # TODO: parse out definitions of fields, flags and assemblies
-        for assembly in self.metaschema_dict["define-assembly"]:
+        for assembly in self.metaschema_dict.get("define-assembly", []):
             self.assemblies.append(self._generate_assembly(assembly_dict=assembly))
 
-        for field in self.metaschema_dict["define-field"]:
+        for field in self.metaschema_dict.get("define-field", []):
             self.fields.append(self._generate_field(field_dict=field))
 
-        for flag in self.metaschema_dict["define-flag"]:
+        for flag in self.metaschema_dict.get("define-flag", []):
             self.flags.append(self._generate_flag(flag_dict=flag))
-
-        # TODO: create a directory corresponding the the metaschema namespace (top level assembly "root-name") (makes a python package)
 
         # TODO: iterate through definitions and pass them to the appropriate jinja templates. for "@ref", include an import and reference. check global imports.
 
-    def _generate_assembly(self, assembly_dict) -> str:
-        assembly_class = ""
-        # Parse assembly data, pass to jinja template and return generated string
+    def _get_local_methods(self) -> None:
+        """
+        Returns the local symbols defined in this metaschema, so that we can dereference "@refs"
+        """
+
+        # return empty list if key does not exist
+        for assembly in self.metaschema_dict.get("define-assembly", []):
+            self.local_methods[assembly["@name"]] = (
+                f'{self.metaschema_dict._get_class_name(assembly["formal-name"])}'
+            )
+        # return empty list if key does not exist
+        for field in self.metaschema_dict.get("define-field", []):
+            self.local_methods[field["@name"]] = (
+                f'{self.metaschema_dict._get_class_name(field["formal-name"])}'
+            )
+        # return empty list if key does not exist
+        for flag in self.metaschema_dict.get("define-flag", []):
+            self.local_methods[flag["@name"]] = (
+                f'{self.metaschema_dict._get_class_name(flag["formal-name"])}'
+            )
+
+    def _generate_assembly(self, assembly_dict) -> dict[str, str]:
+        assembly_class = {}
+        assembly_class["name"] = self.metaschema_dict._get_class_name(
+            assembly_dict["formal-name"]
+        )
+        assembly_class["root-name"] = assembly_dict.get("root-name", None)
+        if "define-flag" in assembly_dict.keys():
+            pass
+
         return assembly_class
 
     def _generate_flag(self, flag_dict) -> str:
@@ -95,19 +134,3 @@ class ClassGenerator:
         constraint_class = ""
         # Parse constraint data, pass to jinja template and return generated string
         return constraint_class
-
-    def _process_import(self, import_dict) -> dict[str, str]:
-        """
-        Add importable schema elements to the namespace of the current object. This function doesn't do full parsing,
-        just adds the globals from the imported schema to the internal mapping table available to the classes for @ref
-        calls.
-
-        Args:
-            import_dict (dict): A dict containing the parsed, imported schema.
-
-        Returns:
-            dict[str, str]: _description_
-        """
-        import_functions = {}
-
-        return import_functions
