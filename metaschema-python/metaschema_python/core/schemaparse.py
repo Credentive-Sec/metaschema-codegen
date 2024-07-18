@@ -297,7 +297,7 @@ class MetaSchema(collections.abc.Mapping):
         return import_list
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self.schema_dict})"
+        return f"{self.__class__.__name__}(file:{self.file}, short-name:{self.short_name}, globals:{self.globals}, contents:{self.schema_dict})"
 
     ## implementing abstract classes to turn this into a dict-like object
     def __getitem__(self, key: str) -> str | dict[str, str]:
