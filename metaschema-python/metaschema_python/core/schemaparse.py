@@ -6,7 +6,7 @@ from urllib import request, parse
 import xmlschema
 from lxml import etree
 from pathlib import Path
-from typing import cast, Iterator, TypedDict
+from typing import cast, Iterator
 import logging
 import re
 import dataclasses
@@ -142,7 +142,7 @@ class MetaschemaParser:
             ):
                 dt_base = datatype.base_type.local_name
             else:
-                # This will never fire because metaschema always defines a base class
+                # we should never get here because metaschema always defines a base class
                 dt_base = ""
 
             dt_descriptions = []
@@ -204,7 +204,7 @@ class MetaschemaParser:
                 base_path.resolve()
             file = path.name
         else:
-            # This is URL
+            # This is a URL
             pass
 
         return SchemaPath(base=base_path, name=file)
@@ -249,11 +249,21 @@ class MetaSchema(collections.abc.Mapping):
             dict, schema_xsd.to_dict(cast(xmlschema.XMLResource, metaschema_etree))
         )  # cast doesn't do anything, just shuts up the type checker
         self.short_name = cast(str, self.schema_dict["short-name"])
-        self.globals = self.get_globals()
+        self.globals = self._get_globals()
 
     def _read_local_schema(
         self, metaschema: str | Path, basepath: Path | None = None
     ) -> str:
+        """
+        Reads a schema on a local filesystem.
+
+        Args:
+            metaschema (str | Path): The file to read
+            basepath (Path | None, optional): A optional base path to locate the directory containing the file. Defaults to None.
+
+        Returns:
+            str: The contents of the file.
+        """
         if basepath is not None:
             schema_file = Path(basepath, metaschema)
         else:
@@ -261,12 +271,24 @@ class MetaSchema(collections.abc.Mapping):
 
         return open(schema_file).read()
 
-    def _read_remote_schema(self, baseurl: str, metaschema: str) -> str:
+    def _read_remote_schema(self, metaschema: str, baseurl: str) -> str:
+        """
+        NOT YET IMPLEMENTED: Gets a schema if it is not stored locally, e.g. on a web site.
+
+        Args:
+            baseurl (str): The base URL where the schema can be found
+            metaschema (str): The filename of the schema
+
+        Returns:
+            str: The contents of the file.
+        """
+        # TODO: implement
         return ""
 
-    def get_globals(self) -> list[str]:
+    def _get_globals(self) -> list[str]:
         """
-        Returns the global symbols defined in this metaschema, for "import" in metaschemas that reference this schema
+        Returns the global symbols defined in this metaschema, for "import" in metaschemas that reference this schema.
+        Use the .globals property to fetch this for performance, since it is pre-calcuated by the initializer.
         """
         globals = []
 
@@ -286,6 +308,12 @@ class MetaSchema(collections.abc.Mapping):
         return globals
 
     def _get_imports(self) -> list[str]:
+        """
+        Function to get the other metaschemas that are imported by this one.
+
+        Returns:
+            list[str]: A list of strings representing filenames containing other metaschemas to import
+        """
         import_list = []
         if "import" in self.schema_dict.keys() and isinstance(
             self.schema_dict["import"], list
@@ -297,7 +325,7 @@ class MetaSchema(collections.abc.Mapping):
         return import_list
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(file:{self.file}, short-name:{self.short_name}, globals:{self.globals}, contents:{self.schema_dict})"
+        return f"{self.__dict__}"
 
     ## implementing abstract classes to turn this into a dict-like object
     def __getitem__(self, key: str) -> str | dict[str, str]:
