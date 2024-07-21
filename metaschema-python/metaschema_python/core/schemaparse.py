@@ -38,12 +38,6 @@ class SchemaPath:
     name: str
 
 
-@dataclasses.dataclass
-class GlobalElement:
-    schema: str
-    element: str
-
-
 class MetaschemaParser:
     """
     This class provides a parser that will return one a dictionary containing one or more parsed Metaschema schemas.
@@ -213,6 +207,19 @@ class MetaschemaParser:
 class MetaSchema(collections.abc.Mapping):
     """
     This class represents a parsed metaschema. It presents a dict like interface by implementing the Mapping abstract class methods.
+
+    Attributes
+    __________
+    file: Path
+        the filename of the original location
+    short_name: str
+        the short-name of the metaschema definition
+    roots: list[str]
+        a list of schema elements that can be the root of a document
+    globals: list[str]
+        a list of importable elements (by formal-name)
+    schema_dicts: dict
+        a dictionary containing the full, parsed metaschema
     """
 
     def __init__(
@@ -250,6 +257,7 @@ class MetaSchema(collections.abc.Mapping):
         )  # cast doesn't do anything, just shuts up the type checker
         self.short_name = cast(str, self.schema_dict["short-name"])
         self.globals = self._get_globals()
+        self.roots = self._get_root_elements()
 
     def _read_local_schema(
         self, metaschema: str | Path, basepath: Path | None = None
@@ -285,27 +293,42 @@ class MetaSchema(collections.abc.Mapping):
         # TODO: implement
         return ""
 
-    def _get_globals(self) -> list[str]:
+    def _get_globals(self) -> dict[str, str]:
         """
         Returns the global symbols defined in this metaschema, for "import" in metaschemas that reference this schema.
         Use the .globals property to fetch this for performance, since it is pre-calcuated by the initializer.
         """
-        globals = []
+        globals = {}
 
         # return empty list if key does not exist
         for assembly in self.schema_dict.get("define-assembly", []):
             if assembly.get("@scope") != "local":
-                globals.append(assembly["formal-name"])
+                globals[assembly["@name"]] = assembly["formal-name"]
         # return empty list if key does not exist
         for field in self.schema_dict.get("define-field", []):
             if field.get("@scope") != "local":
-                globals.append(field["formal-name"])
+                globals[field["@name"]] = field["formal-name"]
         # return empty list if key does not exist
         for flag in self.schema_dict.get("define-flag", []):
             if flag.get("@scope") != "local":
-                globals.append(flag["formal-name"])
+                globals[flag["@name"]] = flag["formal-name"]
 
         return globals
+
+    def _get_root_elements(self) -> list[str]:
+        """
+        Get a list of assemblies in this metaschema that have the "root-name" attribute, and can be a top level element of a document.
+
+        Returns:
+            list[str]: list of elements with "root-name"
+        """
+        root_elements = [
+            assembly["formal-name"]
+            for assembly in self.schema_dict.get("define-assembly", [])
+            if assembly.get("root-name") is not None
+        ]
+
+        return root_elements
 
     def _get_imports(self) -> list[str]:
         """
@@ -315,12 +338,10 @@ class MetaSchema(collections.abc.Mapping):
             list[str]: A list of strings representing filenames containing other metaschemas to import
         """
         import_list = []
-        if "import" in self.schema_dict.keys() and isinstance(
-            self.schema_dict["import"], list
-        ):
-            for item in self.schema_dict["import"]:
-                if isinstance(item, dict) and "@href" in item.keys():
-                    import_list.append(item.get("@href"))
+
+        for item in self.schema_dict.get("import", []):
+            if isinstance(item, dict) and "@href" in item.keys():
+                import_list.append(item.get("@href"))
 
         return import_list
 
