@@ -28,6 +28,12 @@ parser.add_argument(
     dest="schema",
     help="[optional] The location of the metaschema xsd file.",
 )
+parser.add_argument(
+    "-N",
+    "--name",
+    dest="package_name",
+    help="The name of the package to generate. This should be the name of the specification (e.g. oscal)",
+)
 
 args = parser.parse_args()
 
