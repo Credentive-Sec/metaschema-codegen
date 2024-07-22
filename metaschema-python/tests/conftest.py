@@ -1,7 +1,7 @@
 import pytest
 
 from metaschema_python.core.schemaparse import MetaschemaParser, MetaSchemaSet
-from metaschema_python.codegen.generate_classes import PackageGenerator, Package
+from metaschema_python.codegen.generate_classes import PackageGenerator
 from pathlib import Path
 
 
@@ -12,17 +12,13 @@ def build_metaschema_set() -> MetaSchemaSet:
 
 
 def package_generator(metaschema_set: MetaSchemaSet) -> PackageGenerator:
-    return PackageGenerator(metaschema_set, Path("/tmp/metaschema_python_ptest/"))
+    return PackageGenerator(
+        metaschema_set, Path("/tmp/metaschema_python_ptest/"), package_name="oscal"
+    )
 
 
 @pytest.fixture(scope="module")
-def parsed_metaschema(pytestconfig):
-    # NOTE: Caching doesn't work because a MetasSchemaSet is not json serializable.
-    # metaschema = pytestconfig.cache.get("metaschema", None)
-    # if metaschema is None:
-    #     metaschema = build_metaschema_set()
-    #     pytestconfig.cache.set("metaschema", metaschema)
-    # return metaschema
+def parsed_metaschema():
     return build_metaschema_set()
 
 
