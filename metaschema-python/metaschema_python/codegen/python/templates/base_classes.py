@@ -17,6 +17,10 @@ class MetaschemaABC(metaclass=ABCMeta):
     """
 
     @abstractmethod
+    def to_dict(self) -> dict:
+        pass
+
+    @abstractmethod
     def to_json(self) -> str:
         """
         Returns a JSON representation of the object.
@@ -155,6 +159,9 @@ class Constraint:
         "matches",
     ]
 
+    def _validate(self):
+        self.target
+
 
 class FlagConstraint(Constraint):
     def __init__(self):
@@ -170,10 +177,16 @@ class FlagConstraint(Constraint):
             )
 
 
+class AssemblyConstraint(Constraint):
+    pass
+
+
 class Assembly(MetaschemaABC):
     """
     A class representing a generic Assembly. This is primarily used by the metaschema_python code generator and should not generally be used outside the library.
     """
+
+    constraints: list[AssemblyConstraint] = []
 
     def _apply_constraints(self) -> Self:
         """
@@ -184,6 +197,9 @@ class Assembly(MetaschemaABC):
         """
 
         if True:  # TODO: replace this with working code.
+            for constraint in self.__class__.constraints:
+                # process
+                pass
             return self
         else:
             # TODO: include information about specific constraint violated
