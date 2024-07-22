@@ -101,13 +101,17 @@ class Datatype:
     # TODO: since the metaschema datatypes inherit from XMLSchema datatypes, can we infer a type for the datatype (e.g. xs:date -> datetime.date). We would need a dict in here to contain the mapping
     """
     A datatype defined in Metaschema. This will be a string with an associated regular expression.
+
+    Class Variables
+    ---------------
+    pattern (str): the pattern associated with the datatype
     """
 
-    # this base class will accept any valid string, this is overridden in subclasses.
-    pattern: str = "*"
+    # The pattern associated with the datatype - will be overridden in subclasses
+    PATTERN: str = "*"
 
     @classmethod
-    def _match_pattern(cls, input: str) -> bool:
+    def validate(cls, input: str) -> bool:
         """
         class method to compare value to pattern. Used by initializer.
 
@@ -118,37 +122,16 @@ class Datatype:
             bool: _description_
         """
 
-        if regex.match(pattern=cls.pattern, string=input) is not None:
+        if regex.match(pattern=cls.PATTERN, string=input) is not None:
             return True
         else:
             return False
 
-    def __init__(self, input: str):
-        """
-        Initializer for Metaschema Datatype. This should only be used in subclasses
-
-        Args:
-            input (str): a string containing the input to be evaluated against the datatype specification
-
-        Raises:
-            MetaschemaException: if the contents of the data do not match the datatype specification
-
-        Returns:
-            _type_: None
-        """
-        # self.__class__ allows this function to work in subclasses that override the pattern class variable
-        if self.__class__._match_pattern(input=input):
-            self.value = input
-        else:
-            raise MetaschemaException(
-                f"Could not create field. Value ({input}) does not match pattern ({self.__class__.pattern})"
-            )
-
     def __str__(self) -> str:
-        return self.value
+        return self.__class__.__name__
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(pattern={self.__class__.pattern}, value={self.value})"
+        return f"{self.__class__.__name__}(pattern={self.__class__.PATTERN}"
 
 
 @dataclass
