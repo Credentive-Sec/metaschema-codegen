@@ -110,6 +110,8 @@ class SchemaObject:
         self._schema = Assembly()
         self._context = None
         self._contents = ""
+    def __repr__(self):
+        return f"{self._schema.name}: {self._contents}"
     def _setschema(self, schema: 'Assembly'):
         object.__setattr__(self, '_schema', schema)
     def __str__(self):
@@ -361,7 +363,8 @@ class ModelObject(SchemaObject):
                 tabs += tab
             toRet = '{\n'
             for flag in self._flags:
-                toRet += f'{tabs}{tab}"{flag}":"{self._flags[flag]}",\n'
+                if self._flags.get(flag) is not None:
+                    toRet += f'{tabs}{tab}"{flag}":"{self._flags[flag]}",\n'
             index = 0
             for index in range(0, len(self._schema['model'])):
                 child = self[index]
@@ -388,12 +391,26 @@ class ModelObject(SchemaObject):
                     toRet += ',\n'
             
             toRet = toRet[:-2] #lop off a final ',\n'
-            toRet+= '\n' + tabs + '}'
+            if len(toRet) == 0:
+                toRet = '{}'
+            else:
+                toRet+= '\n' + tabs + '}'
             return toRet
 
 
     def __getitem__(self, key):
         raise Exception("Attempted to dereference a field")
+    
+    def path(self, path):
+        if path == '':
+            return self
+        slashi = path.find('/')
+        step = path if slashi == -1 else path[:slashi]
+        remainder = '' if slashi == -1 else path[slashi+1:]
+        if step[0] == '@':
+            return self.__getattr__(step[1:])
+        else:
+            return self.__getitem__(step).path(remainder)
 
 class Field(ModelObject):
     """
@@ -445,8 +462,8 @@ class Field(ModelObject):
         if schema is None:
             raise Exception("Cannot parse JSON: no schema given")
         #FIXME: needs to check for flags!
-        if len(json['contents']) > 1:
-            raise Exception("more than jsut text in field")
+        if len(json['contents']) > 1 or (json.get('group-as-name') is None and json['type'] == 'assembly'):
+            raise Exception("more than just text in field")
         toRet = Field(json['contents'][0])
         object.__setattr__(toRet, '_schema', schema)
         object.__setattr__(toRet, '_context', context)
@@ -555,6 +572,10 @@ class Assembly(ModelObject):
         return toRet
     @staticmethod
     def fromJSON(json, schema, context: Context):
+        #fix json schemas having elements that don't occur in the internal data structure
+        #e.g. models having a choice element beneath them
+        if schema._flags.get('_json_wrapper') is not None:
+            return Assembly.fromJSON(json['contents'][schema._flags.get('_json_extra_wrapper')], schema, context)
         toRet = Assembly()
         object.__setattr__(toRet, '_schema', schema)
         object.__setattr__(toRet, '_context', context)
@@ -782,7 +803,7 @@ class Assembly(ModelObject):
             elif mo == 1 and instance == None and int(option.__getattr__('min-occurs') or 0) == 0:
                 return index
             index += 1
-        raise Exception("no valid option in choice!")
+        raise Exception("no valid option in choice!") 
 
 #we can't read a metaschema without some knowledge of what the schema is
 #the schema for metaschema itself is no exception

@@ -3,6 +3,7 @@ import sys
 
 from .core.metaschema_parser import MetaschemaParser
 from .core.assembly import Context
+from .core.metapath import GLR, Grammar, metapath
 
 
 # Parse the command arguments
@@ -44,9 +45,17 @@ except Exception as e:
     print("Error parsing metaschema:", e)
     sys.exit(1)
 
-ctxt = Context("/workspaces/metaschema-python/OSCAL/src/metaschema/oscal_complete_metaschema.xml")
-asm = ctxt.instantiate('catalog', 'xml', '/workspaces/metaschema-python/oscal-content/nist.gov/SP800-53/rev5/xml/NIST_SP-800-53_rev5_catalog.xml')
+#ctxt = Context("/workspaces/metaschema-python/OSCAL/src/metaschema/oscal_complete_metaschema.xml")
 
-print(asm.validate())
+#asm = ctxt.instantiate('catalog', 'xml', '/workspaces/metaschema-python/oscal-content/nist.gov/SP800-53/rev5/xml/NIST_SP-800-53_rev5_catalog.xml')
+#asm = ctxt.instantiate('catalog', 'json', '/workspaces/metaschema-python/oscal-content/nist.gov/SP800-53/rev5/json/NIST_SP-800-53_rev5_catalog.json')
+
+#print(asm.validate())
+#inxmlstr = open('/workspaces/metaschema-python/oscal-content/nist.gov/SP800-53/rev5/xml/NIST_SP-800-53_rev5_catalog.xml').read()
+#outxmlstr = asm.asJSON()
+
+#print(asm.path('metadata/title'))
+
+v = metapath.interpret('test/token/step + 3 idiv 29')
 
 print("finished")
