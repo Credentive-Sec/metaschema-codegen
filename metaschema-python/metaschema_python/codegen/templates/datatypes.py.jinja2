@@ -1,0 +1,28 @@
+from __future__ import annotations
+
+import re
+
+from . base_classes import Datatype
+
+{% for datatype in datatypes -%}
+{% if datatype.parent %}
+class {{ datatype.name }}({{ datatype.parent }}):
+{% else %}
+class {{ datatype.name }}(Datatype):
+{% endif %}
+    """
+    This class defines the {{ datatype.name }} datatype from metaschema. 
+    {% if datatype.pattern %}
+    It stores the unique pattern for the datatype, but leverages the 'validate' classmethod from the Datatype superclass.
+    {% endif %}
+    {% if datatype.parent -%}
+    It is a subclass of {{ datatype.parent }}
+    {%- endif %}
+    """
+    {% if datatype.pattern -%}
+    PATTERN: re.Pattern = {{ datatype.pattern }}
+    {% else %}
+    pass
+    {%- endif %}
+
+    {% endfor -%}
