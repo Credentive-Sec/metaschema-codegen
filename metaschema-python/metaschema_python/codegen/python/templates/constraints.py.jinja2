@@ -1,0 +1,9 @@
+class {{ @name }}(Constraint):
+{% endif %}
+    """
+    This class defines the {{ name }} constraint. 
+    """
+    
+    {%- for key, value in properties %}
+    key = value
+    {%- endfor -%}

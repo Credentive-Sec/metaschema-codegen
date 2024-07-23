@@ -60,7 +60,6 @@ class GeneratedConstraint(NamedTuple):
     """
     A Named Tuple representing the result of processing a constraint with a template
     """
-
     code: str
 
 class Document(NamedTuple):
@@ -393,6 +392,26 @@ class ConstraintGenerator:
     """
     A class to convert a constraint into a format that can be fed to a code generation template.
     """
-    def __init__(self, constraint_dict: dict):
+    def __init__(self, constraint_dict: dict[str, dict]):
+        """
+        __init__ Recursively parses a constraint and produces a template context.
+
+        Args:
+            constraint_dict (dict): "constraint" dictionary parsed from a metaschema element.
+        """
+        # TODO: This is extremely primitive! We will do better when we have a more defined
+        # approach for constraints
         for type, properties in constraint_dict.items():
             template_context = {}
+            template_context["type"] = _pythonize_name(type)
+            template_context["name"] = properties["@name"]
+            template_context["target"] = properties.get("@target", ".")
+            template_context["level"] = properties.get("@level", "ERROR")
+            template_context["properties"] = {}
+            for name, value in properties:
+                template_context["properties"][_pythonize_name(name)] = value
+            
+
+    def _generate(self, template_context: dict):
+        template = jinja_env.get_template("constraints.py.jinja2")
+        template.render(template_context)
