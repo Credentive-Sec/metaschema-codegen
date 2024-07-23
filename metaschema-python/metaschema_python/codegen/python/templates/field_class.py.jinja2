@@ -1,14 +1,10 @@
-from __future__ import annotations
-
-from dataclasses import dataclass
-
-from . import datatypes
-
-from .base_classes import Flag
-
 class {{ class_name }}(Field):
     """
     {{ class_name }} is a field of type {{ datatype }}.
     """
     name: str = {{ field_name }}
     type = {{ datatype }}
+
+    {%- for flag in flags -%}
+    {{ flag }}
+    {%- endfor -%}
