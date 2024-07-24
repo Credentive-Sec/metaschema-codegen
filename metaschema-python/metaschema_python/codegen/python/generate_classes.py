@@ -289,9 +289,10 @@ class ClassGenerator:
         template_context["class_name"] = _pythonize_name(flag_dict["formal-name"])
         template_context["datatype"] = flag_dict["@as-type"]
         template_context["description"] = flag_dict.get("description", None)
-        template_context["constraints"] = self._generate_constraints(
-            type="flag", flag_dict.get("constraint", {})
-        )
+
+        # Build constraints
+        constraint_classes = ConstraintGenerator(constraint_dict=flag_dict.get("constraint", {})).constraint_classes
+        template_context["constraints"] = constraint_classes
 
         template = jinja_env.get_template("flag_class.py.jinja2")
 
@@ -303,6 +304,7 @@ class ClassGenerator:
         )
 
     def _generate_field(self, field_dict, external_refs: list[str]) -> GeneratedClass:
+        # TODO: how to support required fields?
         # Parse flag data, pass to jinja template and return generated string
         # Fields should reference datatypes which will be generated from MetaschemaSet.datatypes
 
@@ -310,6 +312,11 @@ class ClassGenerator:
         template_context = {}
         template_context["class_name"] = _pythonize_name(field_dict["formal-name"])
         template_context["datatype"] = field_dict["@as-type"]
+        template_context["description"] = field_dict.get("description")
+
+        # Build constraints
+        constraint_classes = ConstraintGenerator(constraint_dict=field_dict.get("constraint", {})).constraint_classes
+        template_context["constraints"] = constraint_classes        
 
         template = jinja_env.get_template("field_class.py.jinja2")
 
@@ -322,7 +329,7 @@ class ClassGenerator:
 
     def _generate_assembly(
         self,
-        assembly_dict: dict[str, str],
+        assembly_dict: dict[str, str|dict],
         external_refs: list[str],
     ) -> GeneratedClass:
         assembly_class = {}
@@ -339,7 +346,10 @@ class ClassGenerator:
                 self._generate_field(field, external_refs=external_refs)
             )
 
-        return assembly_class
+        return GeneratedClass( 
+            code="",
+            refs=['']
+        ) # TODO: fis this
 
 
 
@@ -401,6 +411,8 @@ class ConstraintGenerator:
         """
         # TODO: This is extremely primitive! We will do better when we have a more defined
         # approach for constraints
+        self.constraint_classes = []
+
         for type, properties in constraint_dict.items():
             template_context = {}
             template_context["type"] = _pythonize_name(type)
@@ -410,8 +422,11 @@ class ConstraintGenerator:
             template_context["properties"] = {}
             for name, value in properties:
                 template_context["properties"][_pythonize_name(name)] = value
+            self.constraint_classes.append(self._generate(template_context=template_context))
+
             
 
-    def _generate(self, template_context: dict):
+    def _generate(self, template_context: dict) -> str:
         template = jinja_env.get_template("constraints.py.jinja2")
-        template.render(template_context)
+        constraint_class = template.render(template_context)
+        return constraint_class
