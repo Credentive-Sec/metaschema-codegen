@@ -1,15 +1,4 @@
-from __future__ import annotations
-
-import re
-
-from . base_classes import Datatype
-
-{% for datatype in datatypes -%}
-{% if datatype.parent %}
-class {{ datatype.name }}({{ datatype.parent }}):
-{% else %}
-class {{ datatype.name }}(Datatype):
-{% endif %}
+class {{ datatype.name }}(ComplexDataType):
     """
     This class defines the {{ datatype.name }} datatype from metaschema. 
     {% if datatype.pattern %}
@@ -19,10 +8,12 @@ class {{ datatype.name }}(Datatype):
     It is a subclass of {{ datatype.parent }}
     {%- endif %}
     """
-    {% if datatype.pattern -%}
-    PATTERN: re.Pattern = {{ datatype.pattern }}
+    {% if datatype.elements -%}
+    ELEMENTS = [
+        {%- for element in datatype.elements %}
+        "{{ element }}",
+        {% endfor -%}
+    ]
     {% else %}
     pass
     {%- endif %}
-
-    {% endfor -%}

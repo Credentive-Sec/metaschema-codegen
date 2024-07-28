@@ -1,10 +1,12 @@
-class {{ class_name }}(Field):
-    """
-    {{ class_name }} is a field of type {{ datatype }}.
+from base_classes import Flag
 
-    {%- if description -%}
+class {{ class_name }}(Flag):
+    """
+    {{ class_name }} is a flag of type {{ datatype }}.
+
+    {% if description -%}
     {{ description }}
-    {%- endif -%}
+    {%- endif %}
     """
     name: str = {{ field_name }}
     type = {{ datatype }}

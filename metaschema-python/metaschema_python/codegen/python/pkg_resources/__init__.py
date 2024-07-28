@@ -769,7 +769,7 @@ catalog = {
         ],
     },
     "short_name": "oscal-catalog",
-    "globals": ["Catalog", "Control Group", "Control"],
+    "globals": {"catalog": "Catalog", "group": "Control Group", "control": "Control"},
     "roots": ["Catalog"],
 }
 

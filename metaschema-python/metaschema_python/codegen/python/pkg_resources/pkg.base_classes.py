@@ -101,14 +101,14 @@ class MetaschemaABC(metaclass=ABCMeta):
         """
 
 
-class Datatype:
+class SimpleDatatype:
     # TODO: since the metaschema datatypes inherit from XMLSchema datatypes, can we infer a type for the datatype (e.g. xs:date -> datetime.date). We would need a dict in here to contain the mapping
     """
-    A datatype defined in Metaschema. This will be a string with an associated regular expression.
+    A simple datatype defined in Metaschema. This will be a string with an associated regular expression.
 
     Class Variables
     ---------------
-    pattern (str): the pattern associated with the datatype
+    PATTERN (str): the pattern associated with the datatype
     """
 
     # The pattern associated with the datatype - will be overridden in subclasses
@@ -138,6 +138,40 @@ class Datatype:
         return f"{self.__class__.__name__}(pattern={self.__class__.PATTERN}"
 
 
+class ComplexDataType:
+    # TODO: since the metaschema datatypes inherit from XMLSchema datatypes, can we infer a type for the datatype (e.g. xs:date -> datetime.date). We would need a dict in here to contain the mapping
+    """
+    A complex datatype defined in Metaschema. This may be a union type, or it may be a type which embeds other elements (e.g. markup-line).
+
+    Class Variables
+    ---------------
+    pattern (str): the pattern associated with the datatype TODO: FIX
+    """
+
+    # The pattern associated with the datatype - will be overridden in subclasses
+    ALLOWED_ELEMENTS: list[str] = []
+
+    @classmethod
+    def validate(cls, input: str) -> bool:
+        """
+        class method to compare value to pattern. Used by initializer.
+
+        Args:
+            input (str): the potential data to validate
+
+        Returns:
+            bool: true if it passes validation, false otherwise.
+        """
+        # TODO: how do we do this?
+        return True
+
+    def __str__(self) -> str:
+        return self.__class__.__name__
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(pattern={self.__class__.PATTERN}"
+
+
 @dataclass
 class Constraint:
     """
@@ -147,20 +181,16 @@ class Constraint:
         target: A metapath expression identifying the node the constraint applies to
     """
 
+    type: str
     target: str
-    type: Literal[
-        "let",
-        "allowed-values",
-        "expect",
-        "has-cardinality",
-        "index",
-        "index-has-key",
-        "is-unique",
-        "matches",
-    ]
+    # Other values can go here.
 
-    def _validate(self):
+    def validate(self, input: MetaschemaABC):
         self.target
+
+
+class AllowedValueConstraint(Constraint):
+    pass
 
 
 class FlagConstraint(Constraint):
@@ -211,8 +241,19 @@ class Field(MetaschemaABC):
     A class representing a generic Field. This is primarily used by the metaschema_python code generator and should not generally be used outside the library.
     """
 
+    constraints: list[Constraint] = []
+
 
 class Flag(MetaschemaABC):
     """
     A class representing a generic Flag. This is primarily used by the metaschema_python code generator and should not generally be used outside the library.
     """
+
+
+class Metapath:
+    """
+    A class representing a metapath expression
+    """
+
+    def operator(self):
+        pass
