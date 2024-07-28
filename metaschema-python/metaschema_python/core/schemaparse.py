@@ -13,22 +13,58 @@ import dataclasses
 
 logging.basicConfig(level=logging.DEBUG)
 
+# FIXME: This dict is necessary because of a bug in the metaschema xsd. This should be something we can calculate.
+simple_type_map = {
+    "Base64Datatype": "base64",
+    "BooleanDatatype": "boolean",
+    "DateDatatype": "date",
+    "DateTimeDatatype": "date-time",
+    "DateTimeWithTimezoneDatatype": "date-time-with-timezone",
+    "DateWithTimezoneDatatype": "date-with-timezone",
+    "DayTimeDurationDatatype": "day-time-duration",
+    "DecimalDatatype": "decimal",
+    "EmailAddressDatatype": "email-address",
+    "HostnameDatatype": "hostname",
+    "IntegerDatatype": "integer",
+    "IPV4AddressDatatype": "ip-v4-address",
+    "IPV6AddressDatatype": "ip-v6-address",
+    "NonNegativeIntegerDatatype": "non-negative-integer",
+    "PositiveIntegerDatatype": "positive-integer",
+    "StringDatatype": "string",
+    "TokenDatatype": "token",
+    "URIDatatype": "uri",
+    "URIReferenceDatatype": "uri-reference",
+    "UUIDDatatype": "uuid",
+    "MarkupLineDatatype": "markup-line",
+    "MarkupMultilineDatatype": "markup-multiline",
+}
+
 
 # Simple utility classes to simplify data passing
 
 
 @dataclasses.dataclass
-class DataType:
-    name: str
+class SimpleDataType:
+    ref_name: str | None
+    class_name: str
     base_type: str
     description: list[str]
     pattern: re.Pattern | None
 
 
 @dataclasses.dataclass
+class ComplexDataType:
+    ref_name: str
+    class_name: str
+    elements: list[str]
+    description: str | None = None
+
+
+@dataclasses.dataclass
 class MetaSchemaSet:
     base_path: Path
-    datatypes: list[DataType] = dataclasses.field(default_factory=list)
+    simple_datatypes: list[SimpleDataType] = dataclasses.field(default_factory=list)
+    complex_datatypes: list[ComplexDataType] = dataclasses.field(default_factory=list)
     metaschemas: list[MetaSchema] = dataclasses.field(default_factory=list)
 
 
@@ -89,7 +125,9 @@ class MetaschemaParser:
             )
             metaschema_set = MetaSchemaSet(base_path=metaschema_path.base)
             # Parse datatypes
-            metaschema_set.datatypes = MetaschemaParser._parse_data_types(ms_schema)
+            metaschema_set.simple_datatypes, metaschema_set.complex_datatypes = (
+                MetaschemaParser._parse_data_types(ms_schema)
+            )
         else:
             metaschema_path = SchemaPath(
                 base=metaschema_set.base_path, name=str(metaschema_location)
@@ -119,49 +157,69 @@ class MetaschemaParser:
         return metaschema_set
 
     @staticmethod
-    def _parse_data_types(schema: xmlschema.XMLSchema) -> list[DataType]:
-        datatypes: list[DataType] = []
+    def _parse_data_types(
+        schema: xmlschema.XMLSchema,
+    ) -> tuple[list[SimpleDataType], list[ComplexDataType]]:
+        simple_datatypes: list[SimpleDataType] = []
+        complex_datatypes: list[ComplexDataType] = []
 
-        for datatype in schema.simple_types:
+        for simple_datatype in schema.simple_types:
 
-            if datatype.local_name is not None:
-                dt_name = datatype.local_name
+            if simple_datatype.local_name is not None:
+                datatype_name = simple_datatype.local_name
             else:
                 # This will never fire because metaschema always defines a base class
-                dt_name = ""
+                datatype_name = ""
 
             if (
-                datatype.base_type is not None
-                and datatype.base_type.local_name is not None
+                simple_datatype.base_type is not None
+                and simple_datatype.base_type.local_name is not None
             ):
-                dt_base = datatype.base_type.local_name
+                dt_base = simple_datatype.base_type.local_name
             else:
                 # we should never get here because metaschema always defines a base class
                 dt_base = ""
 
             dt_descriptions = []
-            for annotation in datatype.annotations:
+            for annotation in simple_datatype.annotations:
                 # Strip out newlines and tabs
                 dt_descriptions.append(
                     str(annotation).replace("\n", "").replace("\t", "")
                 )
 
-            if datatype.patterns is not None:
+            if simple_datatype.patterns is not None:
                 # Hack here - we know that metaschema only has a single pattern per datatype
-                dt_pattern = datatype.patterns.patterns[0]
+                dt_pattern = simple_datatype.patterns.patterns[0]
             else:
                 dt_pattern = None
 
-            datatypes.append(
-                DataType(
-                    name=dt_name,
+            simple_datatypes.append(
+                SimpleDataType(
+                    ref_name=simple_type_map.get(datatype_name),
+                    class_name=datatype_name,
                     base_type=dt_base,
                     description=dt_descriptions,
                     pattern=dt_pattern,
                 )
             )
 
-        return datatypes
+        for complex_datatype in schema.complex_types:
+            name = complex_datatype.local_name
+            if name is not None and name in simple_type_map.keys():
+                elements = []
+                if type(complex_datatype.content) is xmlschema.validators.XsdGroup:
+                    for element in complex_datatype.content.iter_elements():
+                        elements.append(element.local_name)
+
+                complex_datatypes.append(
+                    ComplexDataType(
+                        ref_name=simple_type_map[name],
+                        class_name=name,
+                        elements=elements,
+                    )
+                )
+
+        return simple_datatypes, complex_datatypes
 
     @staticmethod
     def _get_imports(schema: MetaSchema) -> list[str]:
@@ -303,17 +361,33 @@ class MetaSchema(collections.abc.Mapping):
         # return empty list if key does not exist
         for assembly in self.schema_dict.get("define-assembly", []):
             if assembly.get("@scope") != "local":
-                globals[assembly["@name"]] = assembly["formal-name"]
+                globals.update(self._ref_name(instance=assembly))
         # return empty list if key does not exist
         for field in self.schema_dict.get("define-field", []):
             if field.get("@scope") != "local":
-                globals[field["@name"]] = field["formal-name"]
+                globals.update(self._ref_name(instance=field))
         # return empty list if key does not exist
         for flag in self.schema_dict.get("define-flag", []):
             if flag.get("@scope") != "local":
-                globals[flag["@name"]] = flag["formal-name"]
+                globals.update(self._ref_name(instance=flag))
 
         return globals
+
+    def _ref_name(self, instance: dict) -> dict[str, str]:
+        """
+        calculates the names of the references
+
+        Args:
+            instance (dict): dictionary representing a flag, field or assembly
+
+        Returns:
+            dict[str, str]: a dictionary with a key of the reference name and a value of the formal name
+        """
+        use_name = instance.get("use-name")
+        if use_name is not None:
+            return {use_name: instance["formal-name"]}
+        else:
+            return {instance["@name"]: instance["formal-name"]}
 
     def _get_root_elements(self) -> list[str]:
         """

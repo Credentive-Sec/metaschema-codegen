@@ -1,10 +1,20 @@
 from __future__ import annotations
 
 import jinja2
-from typing import NamedTuple, cast, Literal
+from importlib import resources
+from typing import NamedTuple, cast
 from pathlib import Path
 
-from ...core.schemaparse import MetaSchemaSet, MetaSchema, DataType
+from . import pkg_resources
+
+from .. import CodeGenException
+
+from ...core.schemaparse import (
+    MetaSchemaSet,
+    MetaSchema,
+    SimpleDataType,
+    ComplexDataType,
+)
 
 
 # Module functions and variables
@@ -22,8 +32,11 @@ def _pythonize_name(name: str) -> str:
 
 # Intialize the jinja environment
 jinja_env = jinja2.Environment(
-    loader=jinja2.PackageLoader(package_name="metaschema_python.codegen")
+    loader=jinja2.PackageLoader(package_name="metaschema_python.codegen.python")
 )
+
+
+# Classes
 
 
 class GlobalRef(NamedTuple):
@@ -56,11 +69,14 @@ class GeneratedClass(NamedTuple):
     code: str
     refs: list[str]
 
+
 class GeneratedConstraint(NamedTuple):
     """
     A Named Tuple representing the result of processing a constraint with a template
     """
+
     code: str
+
 
 class Document(NamedTuple):
     """
@@ -74,7 +90,8 @@ class Document(NamedTuple):
 
 class PackageGenerator:
     """
-    This class is initialized with a MetaSchemaSet and generates a package with Python source code for each of the metaschemas.
+    This class is initialized with a MetaSchemaSet and generates a package with Python source
+    code for each of the metaschemas.
     """
 
     def __init__(
@@ -84,13 +101,33 @@ class PackageGenerator:
         package_name: str,
     ) -> None:
         # initialize the package
+        self.metaschema_set = parsed_metaschemas
         self.destination = destination_directory
         self.package_name = package_name
-        self.module_generators: list[ModuleGenerator] = []
+        self.module_generators: list[ModuleGenerator | DatatypeModuleGenerator] = []
 
-        # Get the global symbols from all the metaschemas in the MetaschemaSet
+        # First, identify all the elements which might be used across modules
+        # and put them into a dictionary that can be passed to the code generators
+        self.gather_references()
+
+        # Next, generate code for all of the core datatypes
+        self.generate_datatype_module()
+
+        # Then generate modules for all of the schemas parsed.
+        self.generate_schema_modules()
+
+        # Finally, write the generated files to a directory.
+        self.write_package()
+
+    def gather_references(self):
+        """
+        This function parses all of the metaschema global elements that each metaschema exports for reference in
+        other schemas through "import". For each global element it creates a GlobalRef object with attributes
+        that can be used to generate import statements in the python modules we generate. It also creates
+        GlobalRef objects for datatypes since those are used by all modules.
+        """
         self.global_refs: list[GlobalRef] = []
-        for metaschema in parsed_metaschemas.metaschemas:
+        for metaschema in self.metaschema_set.metaschemas:
             schema_source = str(metaschema.file)
             module_name = _pythonize_name(metaschema.short_name)
             for global_ref_key in metaschema.globals:
@@ -103,19 +140,40 @@ class PackageGenerator:
                     )
                 )
 
-        # add references for metaschema datatypes, they look a little strange because they're in the metaschema xsd,
-        # not a specific metaschema
-        for datatype in parsed_metaschemas.datatypes:
-            self.global_refs.append(
-                GlobalRef(
-                    schema_source="datatype",
-                    module_name="datatypes",
-                    ref_name=datatype.name,
-                    class_name=datatype.name,
+        # add references for metaschema datatypes, they look a little strange because
+        # they're in the metaschema xsd, not a specific metaschema
+        for datatype in self.metaschema_set.simple_datatypes:
+            if datatype.ref_name is not None:
+                self.global_refs.append(
+                    GlobalRef(
+                        schema_source="datatype",
+                        module_name="datatypes",
+                        ref_name=datatype.ref_name,
+                        class_name=datatype.class_name,
+                    )
                 )
-            )
 
-        for metaschema in parsed_metaschemas.metaschemas:
+        for datatype in self.metaschema_set.complex_datatypes:
+            if datatype.ref_name != "":
+                self.global_refs.append(
+                    GlobalRef(
+                        schema_source="datatype",
+                        module_name="datatypes",
+                        ref_name=datatype.ref_name,
+                        class_name=datatype.class_name,
+                    )
+                )
+
+    def generate_datatype_module(self):
+        self.module_generators.append(
+            DatatypeModuleGenerator(
+                simple_types=self.metaschema_set.simple_datatypes,
+                complex_types=self.metaschema_set.complex_datatypes,
+            )
+        )
+
+    def generate_schema_modules(self):
+        for metaschema in self.metaschema_set.metaschemas:
             self.module_generators.append(
                 ModuleGenerator(
                     metaschema=metaschema,
@@ -126,9 +184,60 @@ class PackageGenerator:
     # TODO: create a directory corresponding the the metaschema namespace (top level assembly "root-name") (makes a python package)
     def write_package(self) -> None:
         """
-        Writes all the files in the package to files at a location provided
+        Writes all the files in the package to files at a location provided.
+
+        Note that we assume that thePath exists and represents an empty directory that can be written to.
+        The caller is responsible for verifying that this is correct before giving us the path.
+        We will raise Exceptions if anything doesn't work.
         """
-        pass
+
+        # check the destination directory.
+        try:
+            self._check_directory(self.destination)
+        except CodeGenException as e:
+            raise CodeGenException(f"Error when checking destination directory: {e}")
+
+        # create the directory Path by appending the provided base path and the provided package name
+        package_path = Path(self.destination, self.package_name)
+
+        package_path.mkdir()
+
+        pkg_init = resources.files(pkg_resources).joinpath("pkg.__init__.py")
+        with resources.as_file(pkg_init) as init_file:
+            package_path.joinpath("__init__.py").write_text(init_file.read_text())
+
+        pkg_base_classes = resources.files(pkg_resources).joinpath(
+            "pkg.base_classes.py"
+        )
+        with resources.as_file(pkg_base_classes) as base_classes_file:
+            package_path.joinpath("base_classes.py").write_text(
+                base_classes_file.read_text()
+            )
+
+        for module_generator in self.module_generators:
+            module_file = package_path.joinpath(
+                Path(f"{module_generator.module_name}.py")
+            )
+            module_file.write_text(module_generator.generated_module)
+
+    def _check_directory(self, path_to_check: Path) -> None:
+        """
+        Checks to make sure that a Path exists and represents and empty directory.
+        Raises an exeption if this not true
+
+        Args:
+            path_to_check (Path): the Path to check.
+        """
+        if not path_to_check.exists():
+            raise CodeGenException(f"{str(path_to_check)} does not exist.")
+
+        if not path_to_check.is_dir():
+            raise CodeGenException(
+                f"{str(path_to_check)} exists but is not a directory."
+            )
+
+        if len(list(path_to_check.iterdir())) > 0:
+            raise CodeGenException(f"{str(path_to_check)} exists but is not empty.")
 
     def _pythonized_export_names(self, metaschema: MetaSchema) -> list[str]:
         """
@@ -152,7 +261,8 @@ class PackageGenerator:
 
 class ModuleGenerator:
     """
-    A class to generate python source code from a parsed metaschema.
+    A class to generate a python source code file (module) from a parsed metaschema. It will contain a class for
+    every instance in the metaschema.
     It converts a data object representing a generic metaschema to a python oriented dictionary to pass to a template.
     """
 
@@ -161,7 +271,7 @@ class ModuleGenerator:
         self.version = cast(str, self.metaschema["schema-version"])
         self.module_name = _pythonize_name(cast(str, self.metaschema["short-name"]))
         self.module_imports = []
-        self.class_generators: list[ClassGenerator] = []
+        self.generated_classes: list[GeneratedClass] = []
 
         #
         # The first pass is to generate the list of elements imported by or defined in the metaschema so that we can
@@ -169,205 +279,209 @@ class ModuleGenerator:
         #
 
         # get a list of elements from imports that could be referenced with a "@ref" in this module
+        module_refs: dict[str, str] = {}
+
+        # add the datatypes
+        module_refs.update(
+            {
+                global_ref.ref_name: f"{global_ref.module_name}.{global_ref.class_name}"
+                for global_ref in global_refs
+                if global_ref.module_name == "datatypes"
+            }
+        )
+
+        # get the list of imported schemas and add all the relevant global refs
         imported_schemas = [
             _import["@href"] for _import in self.metaschema.get("import", [])
         ]
 
-        module_refs: dict[str, str] = {}
         for schema in imported_schemas:
             module_refs.update(
                 {
-                    g_ref.ref_name: g_ref.class_name
-                    for g_ref in global_refs
-                    if g_ref.schema_source == schema
+                    global_ref.ref_name: f"{global_ref.module_name}.{global_ref.class_name}"
+                    for global_ref in global_refs
+                    if global_ref.schema_source == schema
                 }
             )
 
-        module_refs.update(self._get_local_refs())
-
-        #
-        # With our ref dictionary in place, we can parse through the underlying elements.
-        #
-
-        # TODO: parse out definitions of fields, flags and assemblies
-        for assembly in self.metaschema.get("define-assembly", []):
-            self.class_generators.append(
-                ClassGenerator(
-                    class_dict=assembly,
-                    type="assembly",
-                    refs=list(module_refs.keys()),
-                )
-            )
-
-        for field in self.metaschema.get("define-field", []):
-            self.class_generators.append(
-                ClassGenerator(
-                    class_dict=field,
-                    type="field",
-                )
-            )
-
-        for flag in self.metaschema.get("define-flag", []):
-            self.class_generators.append(
-                ClassGenerator(
-                    class_dict=flag,
-                    type=flag,
-                )
-            )
-
-        # iterate through definitions and pass them to the appropriate jinja templates. for "@ref", include an import and reference. check global imports.
-
-        # Set of import strings to keep track if the imports that are used by the classes, it's a set since we only need to import once.
-        imports = set()
-
-        # list of classes (each one a class definition generated from the template)
-
-        for generator in self.class_generators:
-            imports.add(generator.used_refs)
-
-    def _get_local_refs(self) -> dict[str, str]:
-        """
-        Returns the local symbols defined in this metaschema, so that we can dereference "@refs".  This is the first pass.
-        """
-        local_refs = {}
+        # record all of the top-level assemblies, flags and fields in this metaschema to include as local refs
+        # Note that a locally defined instance's @ref will overwrite an import @ref, which I think is the correct behavior
 
         for assembly in self.metaschema.get("define-assembly", []):
-            local_refs[f'{_pythonize_name(assembly["@name"])}'] = (
+            module_refs[f'{_pythonize_name(assembly["@name"])}'] = (
                 f'{_pythonize_name(assembly["formal-name"])}'
             )
 
         for field in self.metaschema.get("define-field", []):
-            local_refs[f'{_pythonize_name(field["@name"])}'] = (
+            module_refs[f'{_pythonize_name(field["@name"])}'] = (
                 f'{_pythonize_name(field["formal-name"])}'
             )
 
         for flag in self.metaschema.get("define-flag", []):
-            local_refs[f'{_pythonize_name(assembly["@name"])}'] = (
-                f'{_pythonize_name(assembly["formal-name"])}'
+            module_refs[f'{_pythonize_name(flag["@name"])}'] = (
+                f'{_pythonize_name(flag["formal-name"])}'
             )
 
-        return local_refs
+        #
+        # Second Pass: With our ref dictionary in place, we perform a deeper pars to actually generate the classes.
+        #
+
+        for flag in self.metaschema.get("define-flag", []):
+            self.generated_classes.append(
+                FlagClassGenerator(class_dict=flag, refs=module_refs).generated_class
+            )
+
+        for field in self.metaschema.get("define-field", []):
+            self.generated_classes.append(
+                FieldClassGenerator(class_dict=field, refs=module_refs).generated_class
+            )
+
+        # With the classes generated, we create a Set to contain import strings for the imports that are actually used by
+        # the classes in the module, it's a set since we only need to import once.
+
+        imports = set()
+
+        for generated_class in self.generated_classes:
+            imports.update(generated_class.refs)
+
+        # Finally, we are ready to generate the module source
+        template_context = {}
+        template_context["imports"] = imports
+        template_context["classes"] = [
+            generated_class.code for generated_class in self.generated_classes
+        ]
+
+        template = jinja_env.get_template("module.py.jinja2")
+
+        self.generated_module = template.render(template_context)
 
 
-class ClassGenerator:
+class FlagClassGenerator:
     """
-    A class to convert an Assembly, Field or Flag into a dictionary that can be passed to a template.
+    A class to generate a flag object from parsed metaschema flag data
+    """
+
+    def __init__(self, class_dict: dict, refs: dict[str, str]) -> None:
+        # Parse flag data, and produce a GeneratedClass object
+        data_type = class_dict["@as-type"]
+
+        # Identify the class represnting the datatype
+        template_context = {}
+        template_context["class_name"] = _pythonize_name(class_dict["formal-name"])
+        template_context["datatype"] = data_type
+        template_context["description"] = class_dict.get("description", None)
+
+        # get the approprate ref based on the type
+        datatype_ref = refs[data_type]
+
+        # Build constraints
+        constraint_classes = ConstraintGenerator(
+            constraint_dict=class_dict.get("constraint", {})
+        ).constraint_classes
+        template_context["constraints"] = constraint_classes
+
+        template = jinja_env.get_template("class_flag.py.jinja2")
+
+        class_code = template.render(template_context)
+
+        self.generated_class = GeneratedClass(
+            code=class_code,
+            refs=[datatype_ref],
+        )
+
+
+class FieldClassGenerator:
+    """
+    A class to generate a field object from parsed metaschema flag data
+    """
+
+    def __init__(self, class_dict: dict, refs: dict[str, str]) -> None:
+        data_type = class_dict["@as-type"]
+        datatype_ref = refs[data_type]
+
+        template_context = {}
+        template_context["field_name"] = class_dict["@name"]
+        template_context["data_type"] = data_type
+        template_context["class_name"] = class_dict["formal-name"]
+        template_context["description"] = class_dict.get("description")
+        props = []
+        for prop in class_dict.get("prop", []):
+            props.append(
+                {
+                    "name": prop["@name"],
+                    "value": prop["@value"],
+                    "namespace": prop.get(
+                        "@namespace", "http://csrc.nist.gov/ns/oscal/metaschema/1.0"
+                    ),
+                }
+            )
+        template_context["properties"] = props
+
+        inline_flags = []
+        if "define-flag" in class_dict.keys():
+            for flag in class_dict["define-flag"]:
+                inline_flags.append(
+                    FlagClassGenerator(class_dict=flag, refs=refs).generated_class
+                )
+
+        template_context["inline-flags"] = inline_flags
+
+        template = jinja_env.get_template("class_field.py.jinja2")
+        self.generated_class = GeneratedClass(
+            code=template.render(template_context),
+            refs=[datatype_ref],
+        )
+
+
+class DatatypeModuleGenerator:
+    """
+    A class to generate the datatypes module, including all of the datatypes classes related to the models
     """
 
     def __init__(
-        self,
-        class_dict: dict,
-        type: Literal["assembly", "field", "flag"],
-        refs: list[str] = [],
-    ):
-        # Keep track of all of the refs we actually use.
-        # We use a set since we only need to import it once in the parent module.
-        self.used_refs: set[str] = set()
-
-        # Call the appropriate function for the type, which will load and populate the template
-        if type == "assembly":
-            self.class_text = self._generate_assembly(
-                assembly_dict=class_dict, external_refs=refs
-            )
-        elif type == "field":
-            self.class_text = self._generate_field(
-                field_dict=class_dict, external_refs=refs
-            )
-        else:
-            self.class_text = self._generate_flag(
-                flag_dict=class_dict, external_refs=refs
-            )
-
-    def _generate_flag(self, flag_dict: dict, external_refs: list[str]) -> GeneratedClass:
-        # Parse flag data, pass to jinja template and return generated string
-        if "formal-name" in flag_dict.keys():
-            ref_name = flag_dict["use-name"]
-        else:
-            ref_name = flag_dict["@name"]
-        template_context = {}
-        template_context["base_class"] = "Flag"
-        template_context["class_name"] = _pythonize_name(flag_dict["formal-name"])
-        template_context["datatype"] = flag_dict["@as-type"]
-        template_context["description"] = flag_dict.get("description", None)
-
-        # Build constraints
-        constraint_classes = ConstraintGenerator(constraint_dict=flag_dict.get("constraint", {})).constraint_classes
-        template_context["constraints"] = constraint_classes
-
-        template = jinja_env.get_template("flag_class.py.jinja2")
-
-        class_code = template.render(template_context)
-
-        return GeneratedClass(
-            code=class_code,
-            refs=[template_context["datatype"]],
+        self, simple_types: list[SimpleDataType], complex_types: list[ComplexDataType]
+    ) -> None:
+        generatedclasses: list[str] = []
+        # Generate the simple type classes
+        generatedclasses.extend(
+            SimpleDatatypesGenerator(datatypes=simple_types).datatype_classes
+        )
+        generatedclasses.extend(
+            ComplexDatatypesGenerator(datatypes=complex_types).datatype_classes
         )
 
-    def _generate_field(self, field_dict, external_refs: list[str]) -> GeneratedClass:
-        # TODO: how to support required fields?
-        # Parse flag data, pass to jinja template and return generated string
-        # Fields should reference datatypes which will be generated from MetaschemaSet.datatypes
-
-        # Parse field data, pass to jinja template and return generated string
+        # Finally, we are ready to generate the module source
         template_context = {}
-        template_context["class_name"] = _pythonize_name(field_dict["formal-name"])
-        template_context["datatype"] = field_dict["@as-type"]
-        template_context["description"] = field_dict.get("description")
+        template_context["imports"] = [
+            {".base_classes": ["SimpleDatatype", "ComplexDataType"]},
+            {"re": ["Pattern"]},
+        ]
 
-        # Build constraints
-        constraint_classes = ConstraintGenerator(constraint_dict=field_dict.get("constraint", {})).constraint_classes
-        template_context["constraints"] = constraint_classes        
+        template_context["classes"] = generatedclasses
 
-        template = jinja_env.get_template("field_class.py.jinja2")
+        template = jinja_env.get_template("module.py.jinja2")
 
-        class_code = template.render(template_context)
-
-        return GeneratedClass(
-            code=class_code,
-            refs=template_context["used_refs"],
-        )
-
-    def _generate_assembly(
-        self,
-        assembly_dict: dict[str, str|dict],
-        external_refs: list[str],
-    ) -> GeneratedClass:
-        assembly_class = {}
-        assembly_class["name"] = _pythonize_name(assembly_dict["formal-name"])
-        assembly_class["root-name"] = assembly_dict.get("root-name", None)
-
-        inner_flags = []
-        for flag in assembly_dict.get("define-flag", []):
-            inner_flags.append(self._generate_flag(flag, external_refs=external_refs))
-
-        inner_fields = []
-        for field in assembly_dict.get("define-field", []):
-            inner_fields.append(
-                self._generate_field(field, external_refs=external_refs)
-            )
-
-        return GeneratedClass( 
-            code="",
-            refs=['']
-        ) # TODO: fis this
+        self.module_name = "datatypes"
+        self.generated_module = template.render(template_context)
 
 
-
-class DatatypesGenerator:
+class SimpleDatatypesGenerator:
     """
     A class to convert the Metaschema Datatypes into classes
     """
 
-    def __init__(self, datatypes: list[DataType]):
+    def __init__(self, datatypes: list[SimpleDataType]):
         # process the datatypes to make the template context to pass to the template
         template_context = {}
 
         # Metaschema datatypes can inherit from each other, or from an xml datatype.
         # We only count the "parent" datatype for purposes of inheritance if a datatype inherits from a
         # metaschema datatype.
-        metaschema_parents = [datatype.name for datatype in datatypes]
+        metaschema_parents = [datatype.class_name for datatype in datatypes]
 
-        datatype_list = []
+        template = jinja_env.get_template("class_datatype_simple.py.jinja2")
+
+        self.datatype_classes = []
         for datatype in datatypes:
 
             # make the description a single line
@@ -384,24 +498,53 @@ class DatatypesGenerator:
                 parent = None
                 pattern = datatype.pattern
 
-            datatype_list.append(
-                {
-                    "name": datatype.name,
-                    "pattern": pattern,
-                    "description": description,
-                    "parent": parent,
-                }
-            )
-        template_context["datatypes"] = datatype_list
+            datatype = {
+                "name": datatype.class_name,
+                "pattern": pattern,
+                "description": description,
+                "parent": parent,
+            }
 
-        template = jinja_env.get_template("datatypes.py.jinja2")
+            template_context["datatype"] = datatype
 
-        self.datatype_module = template.render(template_context)
+            self.datatype_classes.append(template.render(template_context))
+
+
+class ComplexDatatypesGenerator:
+    """
+    A class to convert the Metaschema Datatypes into classes
+    """
+
+    # class ComplexDataType:
+    # ref_name: str
+    # class_name: str
+    # elements: list[SimpleDataType | ComplexDataType]
+    # description: str | None = None
+
+    def __init__(self, datatypes: list[ComplexDataType]):
+        # process the datatypes to make the template context to pass to the template
+        template_context = {}
+
+        template = jinja_env.get_template("class_datatype_complex.py.jinja2")
+
+        self.datatype_classes = []
+        for datatype in datatypes:
+            datatype = {
+                "name": datatype.class_name,
+                "description": datatype.description,
+                "elements": datatype.elements,
+            }
+
+            template_context["datatype"] = datatype
+
+            self.datatype_classes.append(template.render(template_context))
+
 
 class ConstraintGenerator:
     """
     A class to convert a constraint into a format that can be fed to a code generation template.
     """
+
     def __init__(self, constraint_dict: dict[str, dict]):
         """
         __init__ Recursively parses a constraint and produces a template context.
@@ -416,15 +559,12 @@ class ConstraintGenerator:
         for type, properties in constraint_dict.items():
             template_context = {}
             template_context["type"] = _pythonize_name(type)
-            template_context["name"] = properties["@name"]
-            template_context["target"] = properties.get("@target", ".")
-            template_context["level"] = properties.get("@level", "ERROR")
-            template_context["properties"] = {}
-            for name, value in properties:
-                template_context["properties"][_pythonize_name(name)] = value
-            self.constraint_classes.append(self._generate(template_context=template_context))
-
-            
+            template_context["name"] = properties[0].get("@name")
+            template_context["target"] = properties[0].get("@target", ".")
+            template_context["level"] = properties[0].get("@level", "ERROR")
+            self.constraint_classes.append(
+                self._generate(template_context=template_context)
+            )
 
     def _generate(self, template_context: dict) -> str:
         template = jinja_env.get_template("constraints.py.jinja2")
