@@ -1,10 +1,12 @@
+
+
 class {{ datatype.name }}(ComplexDataType):
     """
-    This class defines the {{ datatype.name }} datatype from metaschema. 
-    {% if datatype.pattern %}
+    This class defines the complex {{ datatype.name }} datatype from metaschema. 
+    {% if datatype.pattern -%}
     It stores the unique pattern for the datatype, but leverages the 'validate' classmethod from the Datatype superclass.
-    {% endif %}
-    {% if datatype.parent -%}
+    {%- endif %}
+    {%- if datatype.parent -%}
     It is a subclass of {{ datatype.parent }}
     {%- endif %}
     """
@@ -12,8 +14,9 @@ class {{ datatype.name }}(ComplexDataType):
     ELEMENTS = [
         {%- for element in datatype.elements %}
         "{{ element }}",
-        {% endfor -%}
+        {%- endfor -%}
     ]
-    {% else %}
+    
+    {%- else -%}
     pass
     {%- endif %}

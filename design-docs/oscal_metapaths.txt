@@ -1,0 +1,393 @@
+This file contains all the metapath expressions present in the OSCAL specification to help us prioritize metapath development.
+
+part[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+part[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name=('objective','assessment-objective')]
+part[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name=('assessment','assessment-method')]/prop[has-oscal-namespace(('http://csrc.nist.gov/ns/oscal','http://csrc.nist.gov/ns/rmf')) and @name='method']
+part[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name=('assessment','assessment-method')]/part[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name=('objects','assessment-objects')]
+part[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name=('objective','assessment-objective')]/prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='method-id']
+responsible-role
+@role-id
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='method']
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='method']/@value
+responsible-role
+@role-id
+responsible-role
+@role-id
+responsible-party
+@role-id
+component
+@uuid
+.
+.
+origin/@type
+responsible-party
+@role-id
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='type']/@value
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='priority']/@value
+.
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='state']/@value
+(.)[@system='http://csrc.nist.gov/ns/oscal']/@name
+(.)[@system=('http://fedramp.gov','http://fedramp.gov/ns/oscal')]/@name
+(.)[@system='http://cve.mitre.org']/@name
+(.)[@system='http://www.first.org/cvss/v2.0']/@name
+(.)[@system='http://www.first.org/cvss/v2.0' and @name='access-vector']/@value
+(.)[@system='http://www.first.org/cvss/v2.0' and @name='access-complexity']/@value
+(.)[@system='http://www.first.org/cvss/v2.0' and @name='authentication']/@value
+(.)[@system='http://www.first.org/cvss/v2.0' and @name=('confidentiality-impact', 'integrity-impact', 'availability-impact')]/@value
+(.)[@system='http://www.first.org/cvss/v2.0' and @name='exploitability']/@value
+(.)[@system='http://www.first.org/cvss/v2.0' and @name='remediation-level']/@value
+(.)[@system='http://www.first.org/cvss/v2.0' and @name='report-confidence']/@value
+(.)[@system='http://www.first.org/cvss/v2.0' and @name='collateral-damage-potential']/@value
+(.)[@system='http://www.first.org/cvss/v2.0' and @name=('target-distribution', 'confidentiality-requirement', 'integrity-requirement', 'availability-requirement')]/@value
+(.)[@system=('http://www.first.org/cvss/v3.0', 'http://www.first.org/cvss/v3.1')]/@name
+(.)[@system=('http://www.first.org/cvss/v3.0', 'http://www.first.org/cvss/v3.1') and @name='access-vector']/@value
+(.)[@system=('http://www.first.org/cvss/v3.0', 'http://www.first.org/cvss/v3.1') and @name='access-complexity']/@value
+(.)[@system=('http://www.first.org/cvss/v3.0', 'http://www.first.org/cvss/v3.1') and @name=('privileges-required', 'confidentiality-impact', 'integrity-impact', 'availability-impact')]/@value
+(.)[@system=('http://www.first.org/cvss/v3.0', 'http://www.first.org/cvss/v3.1') and @name='user-interaction']/@value
+(.)[@system=('http://www.first.org/cvss/v3.0', 'http://www.first.org/cvss/v3.1') and @name='scope']/@value
+(.)[@system=('http://www.first.org/cvss/v3.0', 'http://www.first.org/cvss/v3.1') and @name='exploit-code-maturity']/@value
+(.)[@system=('http://www.first.org/cvss/v3.0', 'http://www.first.org/cvss/v3.1') and @name='remediation-level']/@value
+(.)[@system=('http://www.first.org/cvss/v3.0', 'http://www.first.org/cvss/v3.1') and @name='report-confidence']/@value
+(.)[@system=('http://www.first.org/cvss/v3.0', 'http://www.first.org/cvss/v3.1') and @name=('confidentiality-requirement', 'integrity-requirement', 'availability-requirement')]/@value
+(.)[@system=('http://www.first.org/cvss/v3.0', 'http://www.first.org/cvss/v3.1') and @name='modified-attack-vector']/@value
+(.)[@system=('http://www.first.org/cvss/v3.0', 'http://www.first.org/cvss/v3.1') and @name='modified-attack-complexity']/@value
+(.)[@system=('http://www.first.org/cvss/v3.0', 'http://www.first.org/cvss/v3.1') and @name=('modified-privileges-required', 'modified-confidentiality', 'modified-integrity', 'modified-availability')]/@value
+(.)[@system=('http://www.first.org/cvss/v3.0', 'http://www.first.org/cvss/v3.1') and @name='modified-user-interaction']/@value
+(.)[@system=('http://www.first.org/cvss/v3.0', 'http://www.first.org/cvss/v3.1') and @name='modified-scope']/@value
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='type']/@value
+.[@name='objective']/prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+.[@name='objective']/prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='method']
+.[@name='objective']/prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='method']/@value
+component
+@uuid
+user
+@uuid
+part[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+metadata/role|doc(import-ssp/@href)/metadata/role
+@id
+tasks/responsible-roles
+@role-id
+component
+@uuid
+user
+@uuid
+responsible-party
+@role-id
+metadata/prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+metadata/link/@rel
+//part
+@id
+//prop
+@uuid
+//(control|group|part)
+@id
+//control
+@id
+//param
+@id
+//group
+@id
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+part[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+.
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='status']/@value
+link/@rel
+link[@rel=('related','required','incorporated-into','moved-to') and starts-with(@href,'#')]
+@href
+part[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+part[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='statement']//part[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+.//part[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+part[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name=('assessment','assessment-method')]/part[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+part[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name=('assessment','assessment-method')]/prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+part[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name=('assessment','assessment-method')]/prop[has-oscal-namespace('http://csrc.nist.gov/ns/rmf')]/@name
+part[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name=('assessment','assessment-method')]
+part[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name=('assessment','assessment-method')]/prop[has-oscal-namespace(('http://csrc.nist.gov/ns/oscal','http://csrc.nist.gov/ns/rmf')) and @name='method']/@value
+component
+@uuid
+capability
+@uuid
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+link/@rel
+responsible-role/@role-id|control-implementation/implemented-requirement/responsible-role/@role-id|control-implementation/implemented-requirement/statement/responsible-role/@role-id
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='asset-type']/@value
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='allows-authenticated-scan']/@value
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='virtual']/@value
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='public']/@value
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='implementation-point']/@value
+prop[@name='physical-location']
+@value
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='inherited-uuid']/@value
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='release-date']/@value
+(.)[@type='software']/prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+(.)[@type='service']/link/@rel
+.
+responsible-role
+@role-id
+incorporates-component
+@component-uuid
+set-parameter
+@param-id
+set-parameter
+@param-id
+responsible-role
+@role-id
+statement
+@statement-id
+responsible-role
+@role-id
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/rmf')]/@name
+.
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+link/@rel
+responsible-role/@role-id
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='asset-type']/@value
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='allows-authenticated-scan']/@value
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='public']/@value
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='virtual']/@value
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='implementation-point']/@value
+prop[@name='physical-location']
+@value
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='inherited-uuid']/@value
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='release-date']/@value
+(.)[@type=('software', 'hardware', 'service')]/prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+(.)[@type='validation']/link/@rel
+(.)[@type='software']/prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+(.)[@type='service']/link/@rel
+.
+(.)[@type='interconnection']/prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name=('ipv4-address','ipv6-address')]/@class
+(.)[@type='interconnection']/link/@rel
+(.)[@type='interconnection']/responsible-role/@role-id
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='isa-date']/@value
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='ipv4-address']/@value
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='ipv6-address']/@value
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='direction']/@value
+responsible-role
+@role-id
+.
+.
+.
+.
+.
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='type']/@value
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='privilege-level']/@value
+role-id
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='asset-id']
+responsible-party/@role-id
+responsible-party
+@role-id
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='asset-type']/@value
+(.)[@type=('software', 'hardware', 'service')]/prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='is-scanned']/@value
+link/@rel
+responsible-party/@role-id
+responsible-party
+@role-id
+responsible-party
+party-uuid
+responsible-party
+@role-id
+published|last-modified|link[@rel='canonical']
+link/@rel
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='type']/@value
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='type' and @value='data-center']/@class
+address
+title|address|email-address|telephone-number
+.
+.
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+role
+@id
+document-id
+@scheme
+.
+prop
+@name
+@ns
+@class
+@group
+@value
+.//prop
+@uuid
+link
+@href
+@rel
+@media-type
+role
+@id
+location
+@uuid
+party
+@uuid
+party[@type='organization']
+@uuid
+responsible-party
+@role-id
+responsible-party/@role-id
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+link/@rel
+document-id
+@scheme
+.
+.
+.
+.
+.
+.
+.
+.
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='published']/@value
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='type']/@value
+rlink|base64
+rlink
+@href
+@media-type
+base64
+@filename
+.[citation]
+resource
+@uuid
+.[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+.[starts-with(@href,'#')]
+.[@rel=('reference') and starts-with(@href,'#')]/@href
+.[@rel=('reference') and starts-with(@href,'#')]
+@href
+.[@rel=('reference') and not(starts-with(@href,'#'))]/@href
+@resource-fragment
+.
+@role-id
+responsible-party
+@role-id
+responsible-party
+party-uuid
+./system/@value
+./type[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@value
+.[@algorithm=('SHA-224','SHA3-224')]
+.[@algorithm=('SHA-256','SHA3-256')]
+.[@algorithm=('SHA-384','SHA3-384')]
+.[@algorithm=('SHA-512','SHA3-512')]
+.
+.
+component
+@uuid
+.
+.
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+set-parameter
+@param-id
+control-implementation/implemented-requirement//by-component|doc(system-implementation/leveraged-authorization/link[@rel='system-security-plan']/@href)/system-security-plan/control-implementation/implemented-requirement//by-component
+@uuid
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+prop[@name=('identity-assurance-level','authenticator-assurance-level','federation-assurance-level')]/@value
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='cloud-deployment-model']/@value
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='cloud-service-model']/@value
+responsible-party
+@role-id
+responsible-party/@role-id
+.
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='privacy-designation']/@value
+link/@rel
+link[@rel='privacy-impact-assessment']/@href[starts-with(.,'#')]
+link[@rel='privacy-impact-assessment' and starts-with(@href,'#')]
+@href
+link[@rel='privacy-impact-assessment']/@href[not(starts-with(.,'#'))]
+information-type/(confidentiality-impact|integrity-impact|availability-impact)/(base|selected)
+diagram
+@uuid
+link/@rel
+link[@rel='diagram']/@href[starts-with(.,'#')]
+link[@rel='diagram' and starts-with(@href,'#')]
+@href
+link[@rel='diagram']/@href[not(starts-with(.,'#'))]
+diagram
+@uuid
+diagram
+@uuid
+link/@rel
+link[@rel='system-security-plan']/@href[starts-with(.,'#')]
+link[@rel='system-security-plan' and starts-with(@href,'#')]
+@href
+link[@rel='system-security-plan']/@href[not(starts-with(.,'#'))]
+leveraged-authorization
+@uuid
+component/prop[@name='leveraged-authorization-uuid']
+@value
+component
+@uuid
+component/link[@rel='depends-on']
+@href
+component[@type='validation']
+@uuid
+component/link[@rel='validated-by']
+@href
+component/link[@rel='proof-of-compliance']
+@href
+component[@type='service']
+@uuid
+component/link[@rel='uses-service']
+@href
+component[@type='service']
+@uuid
+component[@type='service']/link[@rel='provided-by']
+@href
+(component | inventory-item)/prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='allows-authenticated-scan']/@value
+user
+@uuid
+set-parameter
+@param-id
+implemented-requirement//by-component/export/provided
+@uuid
+(.|statement|.//by-component)/prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')]/@name
+(.|statement|.//by-component)/prop[has-oscal-namespace('http://csrc.nist.gov/ns/oscal') and @name='control-origination']/@value
+responsible-role/@role-id
+responsible-role|statement/responsible-role|.//by-component//responsible-role
+@role-id
+responsible-role|statement/responsible-role|.//by-component//responsible-role
+party-uuid
+.//by-component
+set-parameter
+@param-id
+responsible-role
+@role-id
+statement
+@statement-id
+by-component
+@component-uuid
+responsible-role/@role-id
+responsible-role
+@role-id
+by-component
+@component-uuid
+responsible-role
+@role-id
+responsible-role
+@role-id
+provided|responsibility
+responsibility
+@provided-uuid
+responsible-role
+@role-id
+responsible-role
+@role-id
+link/@rel
+.//responsible-role/@role-id
+set-parameter
+@param-id
+link/@rel
+link[@rel='provided-by']
+@href

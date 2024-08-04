@@ -19,5 +19,6 @@ def generated_package(parsed_metaschema):
         parsed_metaschema,
         Path("/tmp/metaschema_python_ptest/"),
         package_name="oscal",
+        ignore_existing_files=True,
     )
     return pg

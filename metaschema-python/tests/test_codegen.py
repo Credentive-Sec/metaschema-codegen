@@ -28,5 +28,4 @@ class TestPackageGenerator:
 class TestDatatypesGenerator:
     def test_generate_datatypes(self, parsed_metaschema):
         dt_gen = SimpleDatatypesGenerator(parsed_metaschema.datatypes)
-        print(dt_gen.datatype_module)
-        assert isinstance(dt_gen.datatype_module, str)
+        assert isinstance(dt_gen.datatype_classes, str)

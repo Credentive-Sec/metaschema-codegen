@@ -99,11 +99,13 @@ class PackageGenerator:
         parsed_metaschemas: MetaSchemaSet,
         destination_directory: Path,
         package_name: str,
+        ignore_existing_files: bool = False,
     ) -> None:
         # initialize the package
         self.metaschema_set = parsed_metaschemas
         self.destination = destination_directory
         self.package_name = package_name
+        self.ignore_existing_files = ignore_existing_files
         self.module_generators: list[ModuleGenerator | DatatypeModuleGenerator] = []
 
         # First, identify all the elements which might be used across modules
@@ -200,7 +202,7 @@ class PackageGenerator:
         # create the directory Path by appending the provided base path and the provided package name
         package_path = Path(self.destination, self.package_name)
 
-        package_path.mkdir()
+        package_path.mkdir(exist_ok=self.ignore_existing_files)
 
         pkg_init = resources.files(pkg_resources).joinpath("pkg.__init__.py")
         with resources.as_file(pkg_init) as init_file:
@@ -236,7 +238,10 @@ class PackageGenerator:
                 f"{str(path_to_check)} exists but is not a directory."
             )
 
-        if len(list(path_to_check.iterdir())) > 0:
+        if (
+            self.ignore_existing_files is False
+            and len(list(path_to_check.iterdir())) > 0
+        ):
             raise CodeGenException(f"{str(path_to_check)} exists but is not empty.")
 
     def _pythonized_export_names(self, metaschema: MetaSchema) -> list[str]:
