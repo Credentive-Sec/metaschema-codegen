@@ -40,7 +40,7 @@ args = parser.parse_args()
 
 # Parse all of the metaschema definitions into trees.
 try:
-    metaschema_dict = MetaschemaParser.parse(metaschema_location=args.location)
+    metaschema_dict = MetaschemaParser.parse(metaschema_file=args.location)
 except Exception as e:
     print("Error parsing metaschema:", e)
     sys.exit(1)
