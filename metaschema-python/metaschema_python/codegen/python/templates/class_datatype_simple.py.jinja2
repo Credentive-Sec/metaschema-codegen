@@ -5,7 +5,7 @@ class {{ datatype.name }}({{ datatype.parent }}):
 class {{ datatype.name }}(SimpleDatatype):
 {%- endif %}
     """
-    This class defines the simple {{ datatype.name }} datatype from metaschema.
+    This class defines the simple type{{ datatype.name }} from the metaschema specification.
     {% if datatype.pattern %}
     It stores the unique pattern for the datatype, but leverages the 'validate' classmethod from the Datatype superclass.
     {% endif %}

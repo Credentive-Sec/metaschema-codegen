@@ -1,4 +1,4 @@
-from base_classes import Flag
+
 
 class {{ class_name }}(Flag):
     """
@@ -8,7 +8,7 @@ class {{ class_name }}(Flag):
     {{ description }}
     {%- endif %}
     """
-    name: str = {{ field_name }}
+    name: str = "{{ flag_name }}"
     type = {{ datatype }}
 
     {%- if constraint -%}
