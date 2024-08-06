@@ -8,17 +8,6 @@ class Lex():
         if isinstance(value, str):
             return self.name == value
         return self.name == value.name
-    @staticmethod
-    def tokenize(string, lexer):
-        string = re.sub('\n+', ' ', string)
-        string = re.sub(' +', ' ', string)
-        string = re.sub(r'([`\-=[]\\;\',./~!@#$%^&*()_+{}|:"<>?])', ' \1', string)
-        toRet = []
-        for item in string.split(' '):
-            type = lexer.get(item) or 'raw'
-            toRet.append(Lex(type, item))
-        return toRet
-    
     def __repr__(self):
         return f"{self.name}({self.value})"
 
@@ -84,7 +73,7 @@ class OnTheFlyAutomaton():
                     self.addToClosure((rule[0], rule[1], rule[2]+1))
     def resetState(self):
         self.state = []
-        self.addToClosure(('S', ['S'], 0))
+        self.addToClosure(('TOP', ['S'], 0))
     def setState(self, state):
         self.state = state
     def getState(self):
@@ -123,6 +112,8 @@ class TreeStack():
                 return parent['children'][-1]
         else:
             return {'parent': parent, 'contents':[item.copy() for item in contents]}
+    def clear(self):
+        self.roots = []
 
 class Queue():
     def __init__(self):
@@ -146,6 +137,13 @@ class GLR():
         self.finishedInterpretations = []
 
     def parse(self, input):
+        #clear any leftovers from a previous parse
+        self.autmtn.resetState()
+        self.workspace = []
+        self.stack.clear()
+        self.finishedInterpretations = []
+
+        #begin new parse
         self.input = input.copy()
         currentState = self.compileState()
         stackroot = self.stack.add(None, currentState)
@@ -180,6 +178,9 @@ class GLR():
         
         #check for possible reductions
         for rule in self.autmtn.possibleReductions():
+            #sentinel case: we are trying to apply the TOP -> S rule
+            if rule[0] == 'TOP':
+                continue
             #apply reductions
             self.loadState(state)
             seq = []
@@ -214,20 +215,21 @@ class Tokenizer():
     def addToken(self, token, pattern):
         self.patterns.append((token, pattern))
     def tokenize(self, string):
-        string = re.sub(r'(\w)(\W)', r'\1 \2', string)
-        string = re.sub(r'(\W)(\w)', r'\1 \2', string)
-        string = re.sub(r'(\W)(\W)', r'\1 \2', string)
-        string = re.sub(r'\n+', r' ', string)
-        string = re.sub(r' +', r' ', string)
+        #doesn't quite tokenize right
+        #it *should* take the largest token it can, but it seems regex prefers the leftmost satisfier of an or statement
+        regex = '|'.join('(%s)' % pattern[1] for pattern in self.patterns)
+        regex+=r'|(.)'
         toRet = []
-        for item in string.split(' '):
-            toRet.append(self.tokenizeOne(item))
+        for match in re.finditer(regex, string):
+            if match.lastindex-1 == len(self.patterns):
+                raise Exception(f'unexpected symbol {match.group()}')
+            
+            kind = self.patterns[match.lastindex-1][0]
+            val = match.group()
+            if kind == '_SKIP' or kind == 'WHITESPACE':
+                continue
+            toRet.append(Lex(kind, val))
         return toRet
-    def tokenizeOne(self, string):
-        for pattern in self.patterns:
-            if re.fullmatch(pattern[1], string) is not None:
-                return Lex(pattern[0],string)
-        return Lex(string, string)
 
 class Language():
     def __init__(self, lexicon=None, grammar=None, interpreter=None):
@@ -242,6 +244,7 @@ class Language():
             self.parser = GLR(grammar)
 
         self.interpretNode = interpreter
+        self.wrapInterpreter = True
         self.ready = lexicon is not None and grammar is not None and interpreter is not None
     def interpret(self, string):
         if not self.ready or self.exec is None or isinstance(self.parser, Grammar):
@@ -252,10 +255,13 @@ class Language():
     
     def setFunc(self, func):
         self.interpretNode = func
-
+    def wrapExec(self, wrap):
+        self.wrapInterpreter = wrap
     def exec(self, node):
         if not self.ready or self.interpretNode is None:
             raise Exception('no walker given')
+        if not self.wrapInterpreter:
+            return self.interpretNode(node)
         if isinstance(node, Lex):
             return self.interpretNode(node.name, [node.value])
         args = []
@@ -278,11 +284,21 @@ class Language():
         self.parser.addRule(fr, to)
 
     def t(self, token, pattern):
+        "Shorthand for tokenRule"
         self.tokenRule(token, pattern)
+
+    def kw(self, keyword):
+        "kw(keyword): register keyword as a keyword (a token whose type is its name, that must be followed by a space)"
+        self.tokenRule(keyword, re.escape(keyword)+r'(?=\s)')
 
     def kws(self, keywords):
         for kw in keywords:
-            self.tokenRule(kw, kw)
+            self.kw(kw)
+
+    def symbols(self, symbols):
+        "symbols(symbols): takes in a list of symbols (tokens whose types are their names)"
+        for symbol in symbols:
+            self.tokenRule(symbol, re.escape(symbol))
 
     def r(self, fr, to):
         self.syntaxRule(fr, to)
@@ -303,12 +319,19 @@ class Language():
         self.ready = True
 
 metapath = Language()
-metapath.kws(['or', 'and', 'div', 'idiv', 'mod', 'child', 'descendant', 'self', 'parent', 'ancestor'])
+metapath.symbols(['@', '!', ']', '}', ':=', ':', '::', ',', ')', ':*', '.', '..', '$', '=>', '=', '>=', '>>', '>', '<=', '<<', '<'])
+metapath.symbols(['-', '!=', '[', '{', '(', '|', '+', '#', '||', '?', '*:', '/', '//', '*'])
+metapath.kws(['ancestor', 'ancestor-or-self', 'and', 'array', 'as', 'attribute', 'cast', 'castable', 'child', 'comment', 'descendant'])
+metapath.kws(['descendant-or-self', 'div', 'document-node', 'element', 'else' , 'empty-sequence', 'eq', 'every', 'except', 'following'])
+metapath.kws(['following-sibling', 'for', 'function', 'ge', 'gt', 'idiv', 'if', 'in', 'instance', 'intersect', 'is', 'item', 'le', 'let', 'lt'])
+metapath.kws(['map', 'mod', 'namespace', 'namespace-node', 'ne', 'node', 'of', 'or', 'parent', 'preceding', 'preceding-sibling'])
+metapath.kws(['processing-instruction', 'return', 'satisfies', 'schema-attribute', 'schema-element', 'self', 'some', 'text', 'then', 'to', 'treat', 'union'])
 metapath.t('IntegerLiteral', r'[0-9]+')
 metapath.t('DecimalLiteral', r'[0-9]*\.[0-9]+')
 metapath.t('DoubleLiteral', r'[0-9]*\.[0-9]+[eE][+-]?[0-9]+')
 metapath.t('StringLiteral', r'"[^"]*"|\'[^\']*\'')
-metapath.t('token', r'\w+')
+metapath.t('token', r'[\w-]+')
+metapath.t('_SKIP', r'\u000d|\u000a|\u0020|\u0009')
 
 metapath.r('S', ['metapath'])
 metapath.r('metapath', ['expr'])
@@ -329,8 +352,11 @@ metapath.r('andexpr', ['comparisonexpr'])
 metapath.r('andexpr', ['andexpr', 'and', 'comparisonexpr'])
 
 metapath.r('comparisonexpr', ['stringconcatexpr'])
+metapath.r('comparisonexpr', ['stringconcatexpr', 'valuecomp', 'stringconcatexpr'])
+metapath.r('comparisonexpr', ['stringconcatexpr', 'generalcomp', 'stringconcatexpr'])
 
 metapath.r('stringconcatexpr', ['rangeexpr'])
+metapath.r('stringconcatexpr', ['stringconcatexpr', '||', 'rangeexpr'])
 
 metapath.r('rangeexpr', ['additiveexpr'])
 
@@ -349,24 +375,36 @@ metapath.r('intersectexceptexpr', ['arrowexpr'])
 metapath.r('arrowexpr', ['unaryexpr'])
 metapath.r('unaryexpr', ['valueexpr'])
 metapath.r('valueexpr', ['simplemapexpr'])
+
+metapath.ror('generalcomp', ['=', '!=', '<', '<=', '>', '>='])
+metapath.ror('valuecomp', ['eq', 'ne', 'lt', 'le', 'gt', 'ge'])
+
 metapath.r('simplemapexpr', ['pathexpr'])
+
 
 metapath.r('pathexpr', ['/'])
 metapath.r('pathexpr', ['/', 'relativepathexpr'])
 metapath.r('pathexpr', ['//', 'relativepathexpr'])
 metapath.r('pathexpr', ['relativepathexpr'])
 
+metapath.r('relativepathexpr', ['relativepathexpr', '[', 'expr', ']']) #predication
+metapath.r('relativepathexpr', ['relativepathexpr', '/', 'stepexpr']) #direct child
+metapath.r('relativepathexpr', ['relativepathexpr', '//', 'stepexpr']) #any descendant
 metapath.r('relativepathexpr', ['stepexpr'])
-metapath.r('relativepathexpr', ['relativepathexpr', '/', 'stepexpr'])
-metapath.r('relativepathexpr', ['relativepathexpr', '//', 'stepexpr'])
+
+#the semantics of these rules are potentially wrong. for example, a predicate applies to the entire path so far, not just the next step
+
+#metapath.r('relativepathexpr', ['stepexpr'])
+#metapath.r('relativepathexpr', ['relativepathexpr', '/', 'stepexpr'])
+#metapath.r('relativepathexpr', ['relativepathexpr', '//', 'stepexpr'])
 
 metapath.r('stepexpr', ['postfixexpr'])
 metapath.r('stepexpr', ['axisstep'])
 
 metapath.r('axisstep', ['reversestep'])
-metapath.r('axisstep', ['reversestep', 'predicatelist'])
+#metapath.r('axisstep', ['reversestep', 'predicatelist'])
 metapath.r('axisstep', ['forwardstep'])
-metapath.r('axisstep', ['forwardstep', 'predicatelist'])
+#metapath.r('axisstep', ['forwardstep', 'predicatelist'])
 
 metapath.r('forwardstep', ['abbrevforwardstep'])
 metapath.r('forwardstep', ['forwardaxis', 'nametest'])
@@ -396,37 +434,47 @@ metapath.ror('numericliteral', ['IntegerLiteral', 'DecimalLiteral', 'DoubleLiter
 metapath.r('varref', ['$', 'varname'])
 metapath.r('varname', ['eqname'])
 metapath.r('parenthesizedexpr', ['(', 'expr', ')'])
+metapath.r('contextitemexpr', ['.'])
+metapath.r('functioncall', ['eqname', '(', 'argumentlist', ')'])
+metapath.r('argumentlist', ['argument'])
+metapath.r('argumentlist', ['argumentlist', ',', 'argument'])
+metapath.r('argument', ['exprsingle'])
 
 metapath.r('eqname', ['token'])
 
-def metapathwalker(node, args):
-    def binop(args):
-        if len(args) == 1:
-            return args[0]
-        else:
-            match(args[1]):
-                case('+'):
-                    return args[0] + args[2]
-                case('-'):
-                    return args[0] - args[2]
-                case('*'):
-                    return args[0] * args[2]
+def mpwi(node, context):
+    match(node.name + len(node.sub)):
+        case('expr1'):
+            return [mpwi(node.sub[0], context)]
+        case('expr3'):
+            mpwi(node.sub[0], context).append(mpwi(node.sub[2], context))
+        case('orexpr1'):
+            return mpwi(node.sub[0], context)
+        case('orexpr3'):
+            return mpwi(node.sub[0], context) or mpwi(node.sub[2], context)
+        case('andexpr1'):
+            return mpwi(node.sub[0], context)
+        case('andexpr3'):
+            return mpwi(node.sub[0], context) and mpwi(node.sub[2], context)
 
-    match(node):
-        case 'IntegerLiteral':
-            return int(args[0])
-        case 'DecimalLiteral':
-            return float(args[0])
-        case 'additiveexpr':
-            return binop(args)
-        case 'multiplicativeexpr':
-            return binop(args)
-    return args[0]
+def metapathwalker(node):
+    context = {}
+    return mpwi(node, context)
 
 def metapathtopythonwalker(node, args):
     if len(args) == 1:
         return args[0]
     match(node):
+        case 'expr':
+            return f'{args[0]}, {args[2]}'
+        case 'orexpr':
+            return f'{args[0]} or {args[2]}'
+        case 'andexpr':
+            return f'{args[0]} and {args[2]}'
+        case 'comparisonexpr':
+            return f'{args[0]} {"==" if args[1] == "=" else args[1]} {args[2]}'
+        case 'stringconcatexpr':
+            return f'"".join([{args[0]}, {args[2]}])'
         case 'additiveexpr':
             return f'{args[0]} {args[1]} {args[2]}'
         case 'multiplicativeexpr':
@@ -443,10 +491,24 @@ def metapathtopythonwalker(node, args):
         case 'pathexpr':
             return f'({args[1]})'
         case 'relativepathexpr':
+            if len(args) == 4:
+                #predication
+                return f'filter({args[2]}, {args[0]})'
+            if args[1] == '//':
+                return f'filter({args[2]}, all_dscdnts({args[0]}))'
             return f'{args[0]}[{args[2]}]'
+        case 'axisstep':
+            return f'filter({args[1]},{args[0]})'
+        case 'abbrevforwardstep':
+            return f'{args[0]}{args[1]}'
+        case 'predicate':
+            return f'{args[1]}'
         case 'parenthesizedexpr':
             return f'({args[1]})'
+        case 'functioncall':
+            return f'{args[0]}({args[2]})'
     return args[0]
 
-metapath.setExec(metapathtopythonwalker)
+metapath.wrapExec(False)
+metapath.setExec(metapathwalker)
 metapath.finalize()

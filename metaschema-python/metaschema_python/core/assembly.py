@@ -100,7 +100,7 @@ class Context:
             return ModelObject.fromXML(XmlElem.fromDoc(path), self.get(type), self)
         elif binding == 'json':
             return ModelObject.fromJSON(JsonParser(path).raw_data[0], self.get(type), self)
-
+        
 
 class SchemaObject:
     """
@@ -174,6 +174,9 @@ class SchemaObject:
                 print(f"WARNING: unknown type {t}")
                 overrule = True
         return overrule or bool(re.fullmatch(pattern, str))
+
+    def validateConstraints(self):
+        pass
     
 class Flag(SchemaObject):
     def __init__(self, value, schema=None, ctx=None):
