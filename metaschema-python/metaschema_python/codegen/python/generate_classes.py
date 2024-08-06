@@ -36,10 +36,10 @@ jinja_env = jinja2.Environment(
 )
 
 
-# Classes
+# Utility Classes
 
 
-class GlobalRef(NamedTuple):
+class GlobalReference(NamedTuple):
     """
     A NamedTuple to represent an element exported from a metaschema by being tagged "global". This is used to simplify
     generation of import statements and references in one module to classes defined in another module.
@@ -51,10 +51,10 @@ class GlobalRef(NamedTuple):
         class_name (str): the name of the class that will represent the element referenced
     """
 
-    schema_source: str
-    module_name: str
-    ref_name: str
-    class_name: str
+    schema_source: str  # The file where this global is found
+    module_name: str  # The python module that will contain this global
+    ref_name: str  # How this global will be refered to (short-name)
+    class_name: str  # The class name of the class in the module (formal-name)
 
 
 class GeneratedClass(NamedTuple):
@@ -78,14 +78,17 @@ class GeneratedConstraint(NamedTuple):
     code: str
 
 
-class Document(NamedTuple):
+class Root(NamedTuple):
     """
-    A Class to represent a document that containts a Metaschema compliant structure, used to collect all the metaschema
+    A Class to represent a the root of a document that containts a Metaschema compliant structure, used to collect all the metaschema
     assemblies with a 'root-name' attribute. This class is not referenced directly in metascheama, but must exist for a
     root assembly to be JSON serialized by python.
     """
 
     root_elements: list[str]
+
+
+# Classes to parse the metaschemaset
 
 
 class PackageGenerator:
@@ -105,21 +108,20 @@ class PackageGenerator:
         self.metaschema_set = parsed_metaschemas
         self.destination = destination_directory
         self.package_name = package_name
-        self.ignore_existing_files = ignore_existing_files
         self.module_generators: list[ModuleGenerator | DatatypeModuleGenerator] = []
 
-        # First, identify all the elements which might be used across modules
-        # and put them into a dictionary that can be passed to the code generators
-        self.gather_references()
-
-        # Next, generate code for all of the core datatypes
+        # generate code for all of the core datatypes
         self.generate_datatype_module()
 
-        # Then generate modules for all of the schemas parsed.
+        # collect all the elements of each metaschema which might be used across modules
+        # and put them into a dictionary that can be passed to the module/class generators
+        self.gather_references()
+
+        # generate modules for all of the schemas parsed.
         self.generate_schema_modules()
 
-        # Finally, write the generated files to a directory.
-        self.write_package()
+        # write the generated code to files in a directory.
+        self.write_package(ignore_existing_files=ignore_existing_files)
 
     def gather_references(self):
         """
@@ -128,17 +130,19 @@ class PackageGenerator:
         that can be used to generate import statements in the python modules we generate. It also creates
         GlobalRef objects for datatypes since those are used by all modules.
         """
-        self.global_refs: list[GlobalRef] = []
+        self.global_refs: list[GlobalReference] = []
         for metaschema in self.metaschema_set.metaschemas:
             schema_source = str(metaschema.file)
             module_name = _pythonize_name(metaschema.short_name)
-            for global_ref_key in metaschema.globals:
+            for global_reference_key in metaschema.globals.keys():
                 self.global_refs.append(
-                    GlobalRef(
+                    GlobalReference(
                         schema_source=schema_source,
                         module_name=module_name,
-                        ref_name=global_ref_key,
-                        class_name=metaschema.globals[global_ref_key],
+                        ref_name=global_reference_key,
+                        class_name=_pythonize_name(
+                            metaschema.globals[global_reference_key]
+                        ),
                     )
                 )
 
@@ -147,7 +151,7 @@ class PackageGenerator:
         for datatype in self.metaschema_set.simple_datatypes:
             if datatype.ref_name is not None:
                 self.global_refs.append(
-                    GlobalRef(
+                    GlobalReference(
                         schema_source="datatype",
                         module_name="datatypes",
                         ref_name=datatype.ref_name,
@@ -158,7 +162,7 @@ class PackageGenerator:
         for datatype in self.metaschema_set.complex_datatypes:
             if datatype.ref_name != "":
                 self.global_refs.append(
-                    GlobalRef(
+                    GlobalReference(
                         schema_source="datatype",
                         module_name="datatypes",
                         ref_name=datatype.ref_name,
@@ -184,7 +188,7 @@ class PackageGenerator:
             )
 
     # TODO: create a directory corresponding the the metaschema namespace (top level assembly "root-name") (makes a python package)
-    def write_package(self) -> None:
+    def write_package(self, ignore_existing_files: bool) -> None:
         """
         Writes all the files in the package to files at a location provided.
 
@@ -195,14 +199,14 @@ class PackageGenerator:
 
         # check the destination directory.
         try:
-            self._check_directory(self.destination)
+            self._check_directory(self.destination, ignore_existing_files)
         except CodeGenException as e:
             raise CodeGenException(f"Error when checking destination directory: {e}")
 
         # create the directory Path by appending the provided base path and the provided package name
         package_path = Path(self.destination, self.package_name)
 
-        package_path.mkdir(exist_ok=self.ignore_existing_files)
+        package_path.mkdir(exist_ok=ignore_existing_files)
 
         pkg_init = resources.files(pkg_resources).joinpath("pkg.__init__.py")
         with resources.as_file(pkg_init) as init_file:
@@ -222,7 +226,9 @@ class PackageGenerator:
             )
             module_file.write_text(module_generator.generated_module)
 
-    def _check_directory(self, path_to_check: Path) -> None:
+    def _check_directory(
+        self, path_to_check: Path, ignore_existing_files: bool
+    ) -> None:
         """
         Checks to make sure that a Path exists and represents and empty directory.
         Raises an exeption if this not true
@@ -238,30 +244,8 @@ class PackageGenerator:
                 f"{str(path_to_check)} exists but is not a directory."
             )
 
-        if (
-            self.ignore_existing_files is False
-            and len(list(path_to_check.iterdir())) > 0
-        ):
+        if ignore_existing_files is False and len(list(path_to_check.iterdir())) > 0:
             raise CodeGenException(f"{str(path_to_check)} exists but is not empty.")
-
-    def _pythonized_export_names(self, metaschema: MetaSchema) -> list[str]:
-        """
-        given a list of global symbols from a metaschema, convert it to a python safe string of the form "method.Class" for reference in other python strings
-
-        Args:
-            metaschema (MetaSchema): the Metaschema to be processed
-
-        Returns:
-            list[str]: a list of exported functions from the module in python safe format
-        """
-        # convert short name to a python module name
-        module_name = _pythonize_name(metaschema.short_name)
-
-        # convert all element names to python safe names, and prepend the module name
-        class_names = [
-            f"{module_name}.{_pythonize_name(_class)}" for _class in metaschema.globals
-        ]
-        return class_names
 
 
 class ModuleGenerator:
@@ -271,10 +255,14 @@ class ModuleGenerator:
     It converts a data object representing a generic metaschema to a python oriented dictionary to pass to a template.
     """
 
-    def __init__(self, metaschema: MetaSchema, global_refs: list[GlobalRef]) -> None:
+    def __init__(
+        self, metaschema: MetaSchema, global_refs: list[GlobalReference]
+    ) -> None:
         self.metaschema = metaschema
-        self.version = cast(str, self.metaschema["schema-version"])
-        self.module_name = _pythonize_name(cast(str, self.metaschema["short-name"]))
+        self.version = cast(str, self.metaschema.schema_dict["schema-version"])
+        self.module_name = _pythonize_name(
+            cast(str, self.metaschema.schema_dict["short-name"])
+        )
         self.module_imports = []
         self.generated_classes: list[GeneratedClass] = []
 
@@ -297,7 +285,8 @@ class ModuleGenerator:
 
         # get the list of imported schemas and add all the relevant global refs
         imported_schemas = [
-            _import["@href"] for _import in self.metaschema.get("import", [])
+            _import["@href"]
+            for _import in self.metaschema.schema_dict.get("import", [])
         ]
 
         for schema in imported_schemas:
@@ -312,17 +301,17 @@ class ModuleGenerator:
         # record all of the top-level assemblies, flags and fields in this metaschema to include as local refs
         # Note that a locally defined instance's @ref will overwrite an import @ref, which I think is the correct behavior
 
-        for assembly in self.metaschema.get("define-assembly", []):
+        for assembly in self.metaschema.schema_dict.get("define-assembly", []):
             module_refs[f'{_pythonize_name(assembly["@name"])}'] = (
                 f'{_pythonize_name(assembly["formal-name"])}'
             )
 
-        for field in self.metaschema.get("define-field", []):
+        for field in self.metaschema.schema_dict.get("define-field", []):
             module_refs[f'{_pythonize_name(field["@name"])}'] = (
                 f'{_pythonize_name(field["formal-name"])}'
             )
 
-        for flag in self.metaschema.get("define-flag", []):
+        for flag in self.metaschema.schema_dict.get("define-flag", []):
             module_refs[f'{_pythonize_name(flag["@name"])}'] = (
                 f'{_pythonize_name(flag["formal-name"])}'
             )
@@ -331,12 +320,12 @@ class ModuleGenerator:
         # Second Pass: With our ref dictionary in place, we perform a deeper pars to actually generate the classes.
         #
 
-        for flag in self.metaschema.get("define-flag", []):
+        for flag in self.metaschema.schema_dict.get("define-flag", []):
             self.generated_classes.append(
                 FlagClassGenerator(class_dict=flag, refs=module_refs).generated_class
             )
 
-        for field in self.metaschema.get("define-field", []):
+        for field in self.metaschema.schema_dict.get("define-field", []):
             self.generated_classes.append(
                 FieldClassGenerator(class_dict=field, refs=module_refs).generated_class
             )
@@ -368,16 +357,17 @@ class FlagClassGenerator:
 
     def __init__(self, class_dict: dict, refs: dict[str, str]) -> None:
         # Parse flag data, and produce a GeneratedClass object
-        data_type = class_dict["@as-type"]
 
-        # Identify the class represnting the datatype
+        # look up the datatype class in the class_dict
+        datatype = class_dict["@as-type"]
+        datatype_class = refs[datatype]
+
+        # Identify the class representing the datatype
         template_context = {}
+        template_context["flag_name"] = _pythonize_name(class_dict["@name"])
         template_context["class_name"] = _pythonize_name(class_dict["formal-name"])
-        template_context["datatype"] = data_type
+        template_context["datatype"] = datatype_class
         template_context["description"] = class_dict.get("description", None)
-
-        # get the approprate ref based on the type
-        datatype_ref = refs[data_type]
 
         # Build constraints
         constraint_classes = ConstraintGenerator(
@@ -391,7 +381,7 @@ class FlagClassGenerator:
 
         self.generated_class = GeneratedClass(
             code=class_code,
-            refs=[datatype_ref],
+            refs=[datatype_class],
         )
 
 
