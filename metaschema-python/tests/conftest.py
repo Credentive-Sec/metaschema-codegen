@@ -7,9 +7,9 @@ from pathlib import Path
 
 @pytest.fixture(scope="module")
 def parsed_metaschema():
-    ms = MetaschemaParser.parse(
-        metaschema_location="../../OSCAL/src/metaschema/oscal_complete_metaschema.xml"
-    )
+    ms = MetaschemaParser(
+        metaschema_location="OSCAL/src/metaschema/oscal_complete_metaschema.xml"
+    ).metaschema_set
     return ms
 
 
@@ -17,7 +17,7 @@ def parsed_metaschema():
 def generated_package(parsed_metaschema):
     pg = PackageGenerator(
         parsed_metaschema,
-        Path("../../test-output"),
+        Path("test-output"),
         package_name="oscal",
         ignore_existing_files=True,
     )
