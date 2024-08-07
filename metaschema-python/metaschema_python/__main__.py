@@ -1,9 +1,9 @@
 import argparse
 import sys
 
-from .core.metaschema_parser import MetaschemaParser
-from .core.assembly import Context
-from .core.metapath import GLR, Grammar, metapath
+from .core.schemaparse import MetaschemaParser
+
+# from .core.assembly import Context
 
 
 # Parse the command arguments
@@ -28,34 +28,32 @@ parser.add_argument(
     dest="schema",
     help="[optional] The location of the metaschema xsd file.",
 )
+parser.add_argument(
+    "-N",
+    "--name",
+    dest="package_name",
+    help="The name of the package to generate. This should be the name of the specification (e.g. oscal)",
+)
 
 args = parser.parse_args()
 
 
 # Parse all of the metaschema definitions into trees.
 try:
-    metaschema_parser = MetaschemaParser(
-        location=args.location,
-        schema_file="/workspaces/metaschema-python/metaschema/schema/xml/metaschema.xsd",
-    )
-    metaschema_contents = metaschema_parser.parse()
-
-
+    metaschema_dict = MetaschemaParser.parse(metaschema_file=args.location)
 except Exception as e:
     print("Error parsing metaschema:", e)
     sys.exit(1)
 
-#ctxt = Context("/workspaces/metaschema-python/OSCAL/src/metaschema/oscal_complete_metaschema.xml")
+# ctxt = Context(
+#     "/workspaces/metaschema-python/OSCAL/src/metaschema/oscal_complete_metaschema.xml"
+# )
+# asm = ctxt.instantiate(
+#     "catalog",
+#     "xml",
+#     "/workspaces/metaschema-python/oscal-content/nist.gov/SP800-53/rev5/xml/NIST_SP-800-53_rev5_catalog.xml",
+# )
 
-#asm = ctxt.instantiate('catalog', 'xml', '/workspaces/metaschema-python/oscal-content/nist.gov/SP800-53/rev5/xml/NIST_SP-800-53_rev5_catalog.xml')
-#asm = ctxt.instantiate('catalog', 'json', '/workspaces/metaschema-python/oscal-content/nist.gov/SP800-53/rev5/json/NIST_SP-800-53_rev5_catalog.json')
-
-#print(asm.validate())
-#inxmlstr = open('/workspaces/metaschema-python/oscal-content/nist.gov/SP800-53/rev5/xml/NIST_SP-800-53_rev5_catalog.xml').read()
-#outxmlstr = asm.asJSON()
-
-#print(asm.path('metadata/title'))
-
-v = metapath.interpret('test/token/step + 3 idiv 29')
+# print(asm.validate())
 
 print("finished")

@@ -1,0 +1,16 @@
+
+
+class {{ class_name }}(Flag):
+    """
+    {{ class_name }} is a flag of type {{ datatype }}.
+
+    {% if description -%}
+    {{ description }}
+    {%- endif %}
+    """
+    name: str = "{{ flag_name }}"
+    type = {{ datatype }}
+
+    {%- if constraint -%}
+    {{ constraint.class_code }}
+    {%- endif -%}

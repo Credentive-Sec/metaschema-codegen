@@ -1,0 +1,18 @@
+
+
+class {{ class_name }}(Field):
+    """
+    {{ class_name }} is a field of type {{ datatype }}.
+
+    {% if description %} {{ description }} {% endif %}
+
+    {% for prop in props %}
+    Class Property: {{ prop.name }}: {{ prop.value }}
+    {% endfor %}
+    """
+    name: str = {{ field_name }}
+    type = {{ datatype }}
+
+    {%- for flag in inline_flags -%}
+        {{ flag }}
+    {%- endfor -%}

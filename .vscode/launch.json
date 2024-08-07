@@ -5,6 +5,12 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}"
+        },
+        {
             "name": "No Arguments",
             "type": "debugpy",
             "request": "launch",
@@ -25,7 +31,9 @@
             "request": "launch",
             "module": "metaschema_python",
             "args": [
-                "OSCAL/src/metaschema/oscal_complete_metaschema.xml"
+                "OSCAL/src/metaschema/oscal_complete_metaschema.xml",
+                "-S",
+                "/workspaces/metaschema-python/metaschema/schema/xml/metaschema.xsd"
             ]
         },
         {

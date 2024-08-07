@@ -34,7 +34,7 @@ class JsonParser:
         try:
             self.json_data = json.loads(input)
         except Exception as e:
-            raise IOError(f"Unable to parse contents of {document_path} as JSON")
+            raise IOError(f"Unable to parse contents of {document_path} as JSON: {e}")
 
     @property
     def raw_data(self) -> list[typing.Any]:

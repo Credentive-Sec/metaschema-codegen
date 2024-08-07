@@ -1,15 +1,26 @@
 from __future__ import annotations
-from typing import Optional
+from typing import Optional, Union, Any, TypeAlias, TypeGuard, cast
 import urllib.parse
 from pathlib import Path
 
-from lxml import etree, objectify
+from lxml import etree
+from xml.etree import ElementTree
+import xmlschema
 
 
 from . import metaschema_models
 
+# Type Aliases
+ParsedMetaschemaDictType: TypeAlias = dict[
+    str, Union["ParsedMetaschemaValueType", "ParsedMetaschemaListType"]
+]
+ParsedMetaschemaValueType: TypeAlias = Union[str, int, ParsedMetaschemaDictType]
+ParsedMetaschemaListType: TypeAlias = list[ParsedMetaschemaValueType]
+
 
 class MetaschemaParser:
+    VALUE_ERROR = ValueError("Parsed Metadata has unexpected contents")
+
     def __init__(
         self,
         location: str,
@@ -51,44 +62,69 @@ class MetaschemaParser:
         else:
             raise NotImplementedError("We haven't implemented schema discovery yet")
 
-    def parse(self) -> dict[str, etree._Element]:
-        parsed_metaschema: dict[str, etree._Element] = {}
-        metaschema_schema = etree.XMLSchema(file=self.schema_file)
+        self.parsed_metaschema = self.parse()
+
+    def parse(self) -> dict[str, ParsedMetaschemaDictType]:
+        metaschema_schema = xmlschema.XMLSchema(source=self.schema_file)
         metaschema_parser = etree.XMLParser(load_dtd=True, resolve_entities=True)
         metaschema_tree = etree.parse(self.metaschema_file, parser=metaschema_parser)
-        if metaschema_schema.validate(metaschema_tree):
-            self.root = metaschema_tree.getroot()
+        parsed_metaschema = metaschema_schema.to_dict(
+            # Cast doesn't do anything, just shuts up the type checker
+            cast(xmlschema.XMLResource, metaschema_tree)
+        )
+        if self.type_guard(parsed_metaschema):
+            schema_name = str(
+                parsed_metaschema.get("short-name", Path(self.base_path).name)
+            )  # shortname is always a str, so we just convert it.
+            self.parsed_metaschema = parsed_metaschema
+            return {schema_name: self.parsed_metaschema}
         else:
-            raise IOError("XML did not conform to schema in ", self.metaschema_file)
+            raise self.VALUE_ERROR
 
-        if self.root.nsmap and None in self.root.nsmap.keys():
-            namespace = "{" + self.root.nsmap[None] + "}"
-            print(namespace)
+    def get_imports(self) -> list[str]:
+        # Import is always a list if it exists
+        import_refs = cast(
+            list, self.parsed_metaschema["oscal-catalog"].get("import", [])
+        )
+        return [item["@href"] for item in import_refs]
+
+    # This function ensures that the parsed document has the correct underlying types
+    def type_guard(self, input: Any) -> TypeGuard[ParsedMetaschemaDictType]:
+        bool_array: list[bool] = []
+        if isinstance(input, dict):
+            bool_array.extend(self.parsed_metaschema_dict_typeguard(input))
+        elif isinstance(input, list):
+            bool_array.extend(self.parsed_metaschema_list_typeguard(input))
         else:
-            namespace = ""
+            bool_array.append(False)
 
-        short_names = [name.text for name in self.root.iter(f"{namespace}short-name")]
+        return all(bool_array)
 
-        short_name = short_names[0]
+    # Called by typeguard for dicts
+    def parsed_metaschema_dict_typeguard(self, input: dict[str, Any]) -> list[bool]:
+        bool_array: list[bool] = []
+        bool_array.extend([isinstance(key, str) for key in input.keys()])
+        for value in input.values():
+            if isinstance(value, str) or isinstance(value, int):
+                bool_array.append(True)
+            elif isinstance(value, list):
+                bool_array.extend(self.parsed_metaschema_list_typeguard(value))
+            elif isinstance(value, dict):
+                bool_array.extend(self.parsed_metaschema_dict_typeguard(value))
+            else:
+                bool_array.append(False)
 
-        if short_name is not None:
-            parsed_metaschema[short_name] = metaschema_tree.getroot()
-        else:
-            raise Exception("short-name is None in " + self.metaschema_file)
+        return bool_array
 
-        # Chase imports
-        for sub_schema in self.root.iter(f"{namespace}import"):
-            sub_schema_href = sub_schema.get("href")
-            if sub_schema_href:
-                print(f"Attempting to import {sub_schema_href}")
-                try:
-                    sub_schema_parser = MetaschemaParser(
-                        location=sub_schema_href,
-                        base_url=str(self.base_path),
-                        schema_file=self.schema_file,
-                    )
-                    parsed_metaschema.update(sub_schema_parser.parse())
-                except Exception as e:
-                    print(f"error loading {sub_schema_href}: {e}")
+    # Called by typeguard for lists
+    def parsed_metaschema_list_typeguard(self, input: list[Any]) -> list[bool]:
+        bool_array: list[bool] = []
+        for item in input:
+            if isinstance(item, str) or isinstance(item, int):
+                bool_array.append(True)
+            elif isinstance(item, dict):
+                bool_array.extend(self.parsed_metaschema_dict_typeguard(item))
+            elif isinstance(item, list):
+                bool_array.extend(self.parsed_metaschema_list_typeguard(item))
 
-        return parsed_metaschema
+        return bool_array
