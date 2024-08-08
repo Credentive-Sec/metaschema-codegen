@@ -10,6 +10,8 @@ class Lex():
         return self.name == value.name
     def __repr__(self):
         return f"{self.name}({self.value})"
+    def isphrase(self):
+        return False
 
 class Phrase():
     def __init__(self, name: str, subphrases):
@@ -25,6 +27,8 @@ class Phrase():
         return (isinstance(value, Phrase) or isinstance(value, Lex)) and self.name == value.name
     def __repr__(self):
         return f"{self.name} {self.sub}"
+    def isphrase(self):
+        return True
     
 class Grammar():
     def __init__(self):
@@ -246,6 +250,12 @@ class Language():
         self.interpretNode = interpreter
         self.wrapInterpreter = True
         self.ready = lexicon is not None and grammar is not None and interpreter is not None
+    def parse(self, string):
+        if isinstance(self.parser, Grammar):
+            raise Exception('Language has uninitialized components (namely, grammar)')
+        tokens = self.lexicon.tokenize(string)
+        tree = self.parser.parse(tokens)
+        return tree
     def interpret(self, string):
         if not self.ready or self.exec is None or isinstance(self.parser, Grammar):
             raise Exception('Language has uninitialized components')

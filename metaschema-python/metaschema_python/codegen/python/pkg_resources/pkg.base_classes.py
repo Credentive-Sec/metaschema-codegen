@@ -3,6 +3,7 @@ from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from typing_extensions import Self, Literal
 import regex
+from ....core.metapath import metapath
 
 
 class MetaschemaException(Exception):
@@ -254,6 +255,30 @@ class Metapath:
     """
     A class representing a metapath expression
     """
+    type: str
+    children: list[Metapath]
+    value: None | str | int
+
+    def __init__(self, expr):
+        if isinstance(expr, str):
+            syntaxtree = metapath.parse(expr)
+            self.type = syntaxtree.name
+            self.value = None
+            self.children = []
+            for child in syntaxtree:
+                self.children.append(Metapath(child))
+        elif expr.isphrase():
+            self.type = expr.name
+            self.value = None
+            self.children = []
+            for child in expr:
+                self.children.append(Metapath(child))
+        else:
+            #expr is a Lex
+            self.type = expr.name
+            self.value = expr.value
+            self.children = []
+            
 
     def operator(self):
         pass
