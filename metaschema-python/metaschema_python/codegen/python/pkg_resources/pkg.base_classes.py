@@ -183,10 +183,12 @@ class Constraint:
 
     type: str
     target: str
+    metapath: str
     # Other values can go here.
 
     def validate(self, input: MetaschemaABC):
         self.target
+        self.metapath
 
 
 class AllowedValueConstraint(Constraint):
