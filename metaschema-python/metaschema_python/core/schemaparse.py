@@ -8,11 +8,12 @@ from typing import cast
 import logging
 import re
 import dataclasses
+from elementpath import regex
 
 logging.basicConfig(level=logging.DEBUG)
 
 # FIXME: This dict is necessary because of a bug in the metaschema xsd. This should be something we can calculate.
-simple_type_map = {
+SIMPLE_TYPE_MAP: dict[str, str] = {
     "Base64Datatype": "base64",
     "BooleanDatatype": "boolean",
     "DateDatatype": "date",
@@ -39,23 +40,32 @@ simple_type_map = {
 
 
 #  utility classes to simplify data passing
-
-
 @dataclasses.dataclass
-class SimpleDataType:
-    ref_name: str | None
-    class_name: str
-    base_type: str
-    description: list[str]
-    pattern: re.Pattern | None
-
-
-@dataclasses.dataclass
-class ComplexDataType:
+class DataType:
     ref_name: str
-    class_name: str
+    name: str
+    documentation: str | None
+
+    def __repr__(self) -> str:
+        return str(dataclasses.asdict(self))
+
+
+@dataclasses.dataclass
+class SimpleRestrictionDatatype(DataType):
+    # HACK: ref_name is how this datatype is referenced in a metaschema specification
+    # The schema is busted so we have a dictionary in the class (simple_type_map)
+    base_type: str
+    patterns: dict[str, str]
+
+
+@dataclasses.dataclass
+class SimpleUnionDatatype(DataType):
+    member_types: list[str]
+
+
+@dataclasses.dataclass
+class ComplexDataType(DataType):
     elements: list[str]
-    description: str | None = None
 
 
 @dataclasses.dataclass
@@ -72,10 +82,19 @@ class GlobalElement:
 
 
 @dataclasses.dataclass
+class Metaschema:
+    file: str
+    short_name: str
+    imports: list[str]
+    globals: dict[str, str]
+    roots: list[str]
+    schema_dict: dict
+
+
+@dataclasses.dataclass
 class MetaSchemaSet:
-    simple_datatypes: list[SimpleDataType] = dataclasses.field(default_factory=list)
-    complex_datatypes: list[ComplexDataType] = dataclasses.field(default_factory=list)
-    metaschemas: list[MetaSchema] = dataclasses.field(default_factory=list)
+    datatypes: list[DataType] = dataclasses.field(default_factory=list)
+    metaschemas: list[Metaschema] = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
@@ -88,7 +107,7 @@ class SchemaParseException(Exception):
     pass
 
 
-class MetaschemaParser:
+class MetaschemaSetParser:
     """
     This class provides a parser that will return a MetaschemaSet containing datatypes and or more parsed Metaschema schemas.
     """
@@ -105,14 +124,32 @@ class MetaschemaParser:
 
         # Parse the XML Schema
         xsd_contents = request.urlopen(schema_location).read()
-        ms_schema = xmlschema.XMLSchema(source=xsd_contents, base_url=schema_base_url)
+        metaschema_schema = xmlschema.XMLSchema(
+            source=xsd_contents, base_url=schema_base_url
+        )
 
         # Initialize a metaschema set for the parser
         self.metaschema_set = MetaSchemaSet()
 
-        # Parse the datatypes from the XSD
-        self.metaschema_set.simple_datatypes = self._parse_simple_datatypes(ms_schema)
-        self.metaschema_set.complex_datatypes = self._parse_complex_datatypes(ms_schema)
+        # Parse simple types only if they are one of the types used in the OSCAL metaschema
+        self.metaschema_set.datatypes.extend(
+            self._parse_simple_datatypes(
+                [
+                    datatype
+                    for datatype in metaschema_schema.simple_types
+                    if datatype.local_name in SIMPLE_TYPE_MAP.keys()
+                ]
+            )
+        )
+        self.metaschema_set.datatypes.extend(
+            self._parse_complex_datatypes(
+                [
+                    datatype
+                    for datatype in metaschema_schema.complex_types
+                    if datatype.local_name in SIMPLE_TYPE_MAP.keys()
+                ]
+            )
+        )
 
         # Start parsing the metaschema itself
         start_path = self._process_input_path(metaschema_location)
@@ -130,89 +167,142 @@ class MetaschemaParser:
             next_schema = (
                 schemas_to_parse.pop()
             )  # removes the schema from the list and returns it
-            metaschema = MetaSchema(schema_xsd=ms_schema, file=Path(base, next_schema))
+            metaschema = MetaSchemaParser(
+                schema_xsd=metaschema_schema, file=Path(base, next_schema)
+            ).metaschema
             self.metaschema_set.metaschemas.append(metaschema)
 
             # Add the schema we just parsed to the list of schemas we've already parsed
             parsed_schemas.add(next_schema)
 
-            # Get the set of imported schemas from the metaschema that are not in the "parsed_schema" set
-            new_schemas = set(metaschema.imports).difference(parsed_schemas)
+            if chase_imports:
+                # Get the set of imported schemas from the metaschema that are not in the "parsed_schema" set
+                new_schemas = set(metaschema.imports).difference(parsed_schemas)
 
-            # add the new_schemas to the schemas_to_parse
-            schemas_to_parse.update(new_schemas)
+                # add the new_schemas to the schemas_to_parse
+                schemas_to_parse.update(new_schemas)
+
+    def _parse_datatype_documentation(
+        self,
+        datatype: (
+            xmlschema.validators.XsdSimpleType | xmlschema.validators.XsdComplexType
+        ),
+    ):
+        if (
+            datatype.annotation is not None
+            and datatype.annotation.documentation is not None
+        ):
+            doc_strings = [
+                str(documentation.text)
+                for documentation in datatype.annotation.documentation
+            ]
+            documentation = "".join(doc_strings)
+
+            # replace "\n" with " " and get rid of "\t"
+            documentation = documentation.replace("\n", " ").replace("\t", "")
+        else:
+            documentation = None
+
+        return documentation
 
     def _parse_simple_datatypes(
-        self, xml_schema: xmlschema.XMLSchema
-    ) -> list[SimpleDataType]:
-        simple_datatypes: list[SimpleDataType] = []
+        self, datatypes: list[xmlschema.validators.XsdSimpleType]
+    ) -> list[DataType]:
+        simple_datatypes = []
 
-        for simple_datatype in xml_schema.simple_types:
-
-            if simple_datatype.local_name is not None:
-                datatype_name = simple_datatype.local_name
-            else:
-                # This will never fire because metaschema always defines a name for datatypes
-                datatype_name = ""
-
-            if (
-                simple_datatype.base_type is not None
-                and simple_datatype.base_type.local_name is not None
-            ):
-                dt_base = simple_datatype.base_type.local_name
-            else:
-                # we should never get here because metaschema always defines a base class for datatypes
-                dt_base = ""
-
-            dt_descriptions = []
-            for annotation in simple_datatype.annotations:
-                # Strip out newlines and tabs
-                dt_descriptions.append(
-                    str(annotation).replace("\n", "").replace("\t", "")
+        for simple_datatype in datatypes:
+            if isinstance(simple_datatype, xmlschema.validators.XsdList):
+                # process as XsdList - none of these in the
+                # current metaschema so we're ignoring them
+                pass
+            elif isinstance(simple_datatype, xmlschema.validators.XsdUnion):
+                # Metaschema defines union types, but they don't appear to be used in oscal. ignoring.
+                pass
+            elif isinstance(
+                simple_datatype, xmlschema.validators.XsdAtomicRestriction
+            ):  # simple_datatype.variety == "atomic"
+                simple_datatypes.append(
+                    self._parse_simple_atomicrestrictions(simple_datatype)
                 )
-
-            if simple_datatype.patterns is not None:
-                if len(simple_datatype.patterns) > 1:
-                    logging.debug(
-                        f"More than one pattern for datatype {datatype_name}!"
-                    )
-                # Hack here - we know that metaschema only has a single pattern per datatype
-                dt_pattern = simple_datatype.patterns.patterns[0]
             else:
-                dt_pattern = None
-
-            simple_datatypes.append(
-                SimpleDataType(
-                    ref_name=simple_type_map.get(datatype_name),
-                    class_name=datatype_name,
-                    base_type=dt_base,
-                    description=dt_descriptions,
-                    pattern=dt_pattern,
+                raise SchemaParseException(
+                    f"Unrecognized simple data type {type(simple_datatype)}"
                 )
-            )
 
         return simple_datatypes
 
+    def _parse_simple_atomicrestrictions(
+        self, datatype: xmlschema.validators.XsdAtomicRestriction
+    ) -> SimpleRestrictionDatatype:
+        if datatype.local_name is not None:
+            name = datatype.local_name  # local_name excludes the namespace
+
+        if name in SIMPLE_TYPE_MAP.keys():
+            ref_name = SIMPLE_TYPE_MAP[name]
+        else:
+            raise SchemaParseException(
+                "Couldn't map " + name + " to any of the expected Metaschema types."
+            )
+
+        if datatype.base_type is not None and datatype.base_type.local_name is not None:
+            base_type = datatype.base_type.local_name
+
+        documentation = self._parse_datatype_documentation(datatype=datatype)
+
+        patterns = {}
+        if datatype.patterns is not None:
+            # We take advantage of the fact that there's only one regex in this particular schema
+            patterns["xml"] = datatype.patterns.regexps[0]
+            # patterns["pcre"] = [
+            #     re_pattern.pattern for re_pattern in datatype.patterns.patterns
+            # ][0]
+            patterns["pcre"] = regex.patterns.translate_pattern(
+                datatype.patterns.regexps[0][0]
+            )
+
+        return SimpleRestrictionDatatype(
+            ref_name=ref_name,
+            name=name,
+            base_type=base_type,
+            documentation=documentation,
+            patterns=patterns,
+        )
+
+    def _parse_simple_union(self, datatype: xmlschema.validators.XsdUnion):
+        # There are some in metaschema, but none are used in OSCAL. Skipping....
+        pass
+
     def _parse_complex_datatypes(
-        self, xml_schema: xmlschema.XMLSchema
+        self, datatypes: list[xmlschema.validators.XsdComplexType]
     ) -> list[ComplexDataType]:
         complex_datatypes: list[ComplexDataType] = []
 
-        for complex_datatype in xml_schema.complex_types:
-            name = complex_datatype.local_name
-            if name is not None and name in simple_type_map.keys():
-                elements = []
-                if type(complex_datatype.content) is xmlschema.validators.XsdGroup:
-                    for element in complex_datatype.content.iter_elements():
-                        elements.append(element.local_name)
+        for complex_datatype in datatypes:
+            if complex_datatype.local_name is not None:
+                name = complex_datatype.local_name
 
-                complex_datatypes.append(
-                    ComplexDataType(
-                        ref_name=simple_type_map[name],
-                        class_name=name,
-                        elements=elements,
-                    )
+            if name in SIMPLE_TYPE_MAP.keys():
+                ref_name = SIMPLE_TYPE_MAP[name]
+            else:
+                raise SchemaParseException(
+                    "Couldn't map " + name + " to any of the expected Metaschema types."
                 )
+
+            documentation = self._parse_datatype_documentation(complex_datatype)
+
+            elements = []
+            if isinstance(complex_datatype.content, xmlschema.validators.XsdGroup):
+                for element in complex_datatype.content.iter_elements():
+                    elements.append(element.local_name)
+
+            complex_datatypes.append(
+                ComplexDataType(
+                    ref_name=ref_name,
+                    name=name,
+                    documentation=documentation,
+                    elements=elements,
+                )
+            )
 
         return complex_datatypes
 
@@ -258,7 +348,7 @@ class MetaschemaParser:
         return SchemaPath(base=base_path, file=file)
 
 
-class MetaSchema:
+class MetaSchemaParser:
     """
     This class represents a parsed metaschema.
 
@@ -300,11 +390,14 @@ class MetaSchema:
             )
         )
 
-        self.file = file.name
-        self.short_name = cast(str, self.schema_dict["short-name"])
-        self.imports = self._get_imports()
-        self.globals = self._get_globals()
-        self.roots = self._get_root_elements()
+        self.metaschema = Metaschema(
+            file=file.name,
+            short_name=cast(str, self.schema_dict["short-name"]),
+            imports=self._get_imports(),
+            globals=self._get_globals(),
+            roots=self._get_root_elements(),
+            schema_dict=self.schema_dict,
+        )
 
     def _read_local_metaschema(
         self, metaschema: str | Path, basepath: Path | None = None
@@ -347,7 +440,6 @@ class MetaSchema:
         """
         globals = {}
 
-        # return empty list if key does not exist
         for assembly in self.schema_dict.get("define-assembly", []):
             if assembly.get("@scope") != "local":
                 globals.update(self._ref_name(instance=assembly))
@@ -407,6 +499,3 @@ class MetaSchema:
                 import_list.append(item.get("@href"))
 
         return import_list
-
-    def __repr__(self) -> str:
-        return f"{self.__dict__}"
