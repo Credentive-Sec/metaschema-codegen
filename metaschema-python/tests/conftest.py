@@ -1,13 +1,13 @@
 import pytest
 
-from metaschema_python.core.schemaparse import MetaschemaParser
+from metaschema_python.core.schemaparse import MetaschemaSetParser
 from metaschema_python.codegen.python.generate_classes import PackageGenerator
 from pathlib import Path
 
 
 @pytest.fixture(scope="module")
 def parsed_metaschema():
-    ms = MetaschemaParser(
+    ms = MetaschemaSetParser(
         metaschema_location="OSCAL/src/metaschema/oscal_complete_metaschema.xml"
     ).metaschema_set
     return ms
