@@ -1,9 +1,13 @@
 from __future__ import annotations
+import urllib.parse
 
 import jinja2
 from importlib import resources
 from typing import NamedTuple, cast
 from pathlib import Path
+
+import datetime
+import urllib
 
 from . import pkg_resources
 
@@ -11,8 +15,9 @@ from .. import CodeGenException
 
 from ...core.schemaparse import (
     MetaSchemaSet,
-    MetaSchema,
-    SimpleDataType,
+    Metaschema,
+    DataType,
+    SimpleRestrictionDatatype,
     ComplexDataType,
 )
 
@@ -53,8 +58,8 @@ class GlobalReference(NamedTuple):
 
     schema_source: str  # The file where this global is found
     module_name: str  # The python module that will contain this global
-    ref_name: str  # How this global will be refered to (short-name)
-    class_name: str  # The class name of the class in the module (formal-name)
+    ref_name: str  # How this global will be referenced when it is a property
+    class_name: str  # The class name of the element in the module
 
 
 class GeneratedClass(NamedTuple):
@@ -88,6 +93,11 @@ class Root(NamedTuple):
     root_elements: list[str]
 
 
+class ImportItem(NamedTuple):
+    module: str
+    classes: list[str]
+
+
 # Classes to parse the metaschemaset
 
 
@@ -104,6 +114,16 @@ class PackageGenerator:
         package_name: str,
         ignore_existing_files: bool = False,
     ) -> None:
+        """
+            This class is initialized with a MetaSchemaSet and generates a package with Python source
+        code for each of the metaschemas.
+
+            Args:
+                parsed_metaschemas (MetaSchemaSet): The metaschemas parsed by the schemaparse module
+                destination_directory (Path): The directory to write the generated code to
+                package_name (str): the name of the package containing the modules
+                ignore_existing_files (bool, optional): Whether to ignore existing directories and files. If true, will overwrite. If false will throw an exception. Defaults to False.
+        """
         # initialize the package
         self.metaschema_set = parsed_metaschemas
         self.destination = destination_directory
@@ -118,7 +138,7 @@ class PackageGenerator:
         self.gather_references()
 
         # generate modules for all of the schemas parsed.
-        self.generate_schema_modules()
+        # self.generate_schema_modules()
 
         # write the generated code to files in a directory.
         self.write_package(ignore_existing_files=ignore_existing_files)
@@ -139,7 +159,7 @@ class PackageGenerator:
                     GlobalReference(
                         schema_source=schema_source,
                         module_name=module_name,
-                        ref_name=global_reference_key,
+                        ref_name=_pythonize_name(global_reference_key),
                         class_name=_pythonize_name(
                             metaschema.globals[global_reference_key]
                         ),
@@ -148,34 +168,20 @@ class PackageGenerator:
 
         # add references for metaschema datatypes, they look a little strange because
         # they're in the metaschema xsd, not a specific metaschema
-        for datatype in self.metaschema_set.simple_datatypes:
+        for datatype in self.metaschema_set.datatypes:
             if datatype.ref_name is not None:
                 self.global_refs.append(
                     GlobalReference(
                         schema_source="datatype",
                         module_name="datatypes",
-                        ref_name=datatype.ref_name,
-                        class_name=datatype.class_name,
-                    )
-                )
-
-        for datatype in self.metaschema_set.complex_datatypes:
-            if datatype.ref_name != "":
-                self.global_refs.append(
-                    GlobalReference(
-                        schema_source="datatype",
-                        module_name="datatypes",
-                        ref_name=datatype.ref_name,
-                        class_name=datatype.class_name,
+                        ref_name=_pythonize_name(datatype.ref_name),
+                        class_name=_pythonize_name(datatype.name),
                     )
                 )
 
     def generate_datatype_module(self):
         self.module_generators.append(
-            DatatypeModuleGenerator(
-                simple_types=self.metaschema_set.simple_datatypes,
-                complex_types=self.metaschema_set.complex_datatypes,
-            )
+            DatatypeModuleGenerator(datatypes=self.metaschema_set.datatypes)
         )
 
     def generate_schema_modules(self):
@@ -256,12 +262,12 @@ class ModuleGenerator:
     """
 
     def __init__(
-        self, metaschema: MetaSchema, global_refs: list[GlobalReference]
+        self, metaschema: Metaschema, global_refs: list[GlobalReference]
     ) -> None:
         self.metaschema = metaschema
-        self.version = cast(str, self.metaschema.schema_dict["schema-version"])
+        self.version = cast(str, metaschema.schema_dict["schema-version"])
         self.module_name = _pythonize_name(
-            cast(str, self.metaschema.schema_dict["short-name"])
+            cast(str, metaschema.schema_dict["short-name"])
         )
         self.module_imports = []
         self.generated_classes: list[GeneratedClass] = []
@@ -272,14 +278,15 @@ class ModuleGenerator:
         #
 
         # get a list of elements from imports that could be referenced with a "@ref" in this module
+        # The form will be {@ref: module.Class}
         module_refs: dict[str, str] = {}
 
-        # add the datatypes
+        # Add the refs to datatypes
         module_refs.update(
             {
                 global_ref.ref_name: f"{global_ref.module_name}.{global_ref.class_name}"
                 for global_ref in global_refs
-                if global_ref.module_name == "datatypes"
+                if global_ref.schema_source == "datatype"
             }
         )
 
@@ -428,113 +435,6 @@ class FieldClassGenerator:
         )
 
 
-class DatatypeModuleGenerator:
-    """
-    A class to generate the datatypes module, including all of the datatypes classes related to the models
-    """
-
-    def __init__(
-        self, simple_types: list[SimpleDataType], complex_types: list[ComplexDataType]
-    ) -> None:
-        generatedclasses: list[str] = []
-        # Generate the simple type classes
-        generatedclasses.extend(
-            SimpleDatatypesGenerator(datatypes=simple_types).datatype_classes
-        )
-        generatedclasses.extend(
-            ComplexDatatypesGenerator(datatypes=complex_types).datatype_classes
-        )
-
-        # Finally, we are ready to generate the module source
-        template_context = {}
-        template_context["imports"] = [
-            {".base_classes": ["SimpleDatatype", "ComplexDataType"]},
-            {"re": ["Pattern"]},
-        ]
-
-        template_context["classes"] = generatedclasses
-
-        template = jinja_env.get_template("module.py.jinja2")
-
-        self.module_name = "datatypes"
-        self.generated_module = template.render(template_context)
-
-
-class SimpleDatatypesGenerator:
-    """
-    A class to convert the Metaschema Datatypes into classes
-    """
-
-    def __init__(self, datatypes: list[SimpleDataType]):
-        # process the datatypes to make the template context to pass to the template
-        template_context = {}
-
-        # Metaschema datatypes can inherit from each other, or from an xml datatype.
-        # We only count the "parent" datatype for purposes of inheritance if a datatype inherits from a
-        # metaschema datatype.
-        metaschema_parents = [datatype.class_name for datatype in datatypes]
-
-        template = jinja_env.get_template("class_datatype_simple.py.jinja2")
-
-        self.datatype_classes = []
-        for datatype in datatypes:
-
-            # make the description a single line
-            if len(datatype.description) > 0:
-                description = "".join(datatype.description)
-            else:
-                description = None
-
-            # check to see if the parent is another metaschema type
-            if datatype.base_type in metaschema_parents:
-                parent = datatype.base_type
-                pattern = None
-            else:
-                parent = None
-                pattern = datatype.pattern
-
-            datatype = {
-                "name": datatype.class_name,
-                "pattern": pattern,
-                "description": description,
-                "parent": parent,
-            }
-
-            template_context["datatype"] = datatype
-
-            self.datatype_classes.append(template.render(template_context))
-
-
-class ComplexDatatypesGenerator:
-    """
-    A class to convert the Metaschema Datatypes into classes
-    """
-
-    # class ComplexDataType:
-    # ref_name: str
-    # class_name: str
-    # elements: list[SimpleDataType | ComplexDataType]
-    # description: str | None = None
-
-    def __init__(self, datatypes: list[ComplexDataType]):
-        # process the datatypes to make the template context to pass to the template
-        template_context = {}
-
-        template = jinja_env.get_template("class_datatype_complex.py.jinja2")
-
-        self.datatype_classes = []
-        for datatype in datatypes:
-            datatype = {
-                "name": datatype.class_name,
-                "description": datatype.description,
-                "elements": datatype.elements,
-            }
-
-            template_context["datatype"] = datatype
-
-            self.datatype_classes.append(template.render(template_context))
-
-
 class ConstraintGenerator:
     """
     A class to convert a constraint into a format that can be fed to a code generation template.
@@ -565,3 +465,120 @@ class ConstraintGenerator:
         template = jinja_env.get_template("constraints.py.jinja2")
         constraint_class = template.render(template_context)
         return constraint_class
+
+
+class DatatypeModuleGenerator:
+    """
+    A class to generate the datatypes module, including all of the datatypes classes related to the models
+    """
+
+    def __init__(self, datatypes: list[DataType]) -> None:
+        generatedclasses: list[str] = []
+        # Generate the simple type classes
+
+        # Map XML datatypes to python built-in types
+        # This ignores any restrictions, e.g a positiveInteger is an int
+        TYPE_MAP = {
+            "anyURI": urllib.parse.ParseResult,
+            "base64Binary": str,
+            "boolean": bool,
+            "date": datetime.date,
+            "dateTime": datetime.datetime,
+            "decimal": float,
+            "duration": datetime.timedelta,
+            "integer": int,
+            "nonNegativeInteger": int,
+            "positiveInteger": int,
+            "string": str,
+            "token": str,
+        }
+
+        # Metaschema datatypes can inherit from each other, or from an xml datatype.
+        # We only count the "parent" datatype for purposes of inheritance if a datatype inherits from a
+        # metaschema datatype.
+        metaschema_parents = [datatype.name for datatype in datatypes]
+
+        for datatype in datatypes:
+            if isinstance(datatype, SimpleRestrictionDatatype):
+                datatype_dict = {}
+                if datatype.base_type in metaschema_parents:
+                    datatype_dict["parent"] = datatype.base_type
+
+                datatype_dict["documentation"] = datatype.documentation
+
+                datatype_dict["name"] = datatype.name
+
+                datatype_dict["pattern"] = datatype.patterns["pcre"]
+
+                generatedclasses.extend(
+                    SimpleDatatypeClassGenerator(
+                        datatype_dict=datatype_dict
+                    ).generated_class
+                )
+            elif isinstance(datatype, ComplexDataType):
+                datatype_dict = {}
+
+                datatype_dict["documentation"] = datatype.documentation
+
+                datatype_dict["name"] = datatype.name
+
+                datatype_dict["elements"] = datatype.elements
+
+                generatedclasses.extend(
+                    ComplexDatatypesGenerator(
+                        datatype_dict=datatype_dict
+                    ).generated_class
+                )
+
+            else:
+                raise CodeGenException(
+                    "Unidentified dataclass type" + datatype.__class__.__name__
+                )
+
+        # Finally, we are ready to generate the module source
+        template_context = {}
+        template_context["imports"] = [
+            ImportItem(
+                module=".base_classes", classes=["SimpleDatatype", "ComplexDataType"]
+            ),
+            ImportItem(module="re", classes=["Pattern", "compile"]),
+        ]
+
+        template_context["classes"] = generatedclasses
+
+        template = jinja_env.get_template("module.py.jinja2")
+
+        self.module_name = "datatypes"
+        self.generated_module = template.render(template_context)
+
+
+class SimpleDatatypeClassGenerator:
+    """
+    A class to convert the Metaschema Datatypes into classes
+    """
+
+    def __init__(self, datatype_dict: dict[str, str]):
+        # process the datatypes to make the template context to pass to the template
+        template = jinja_env.get_template("class_datatype_simple.py.jinja2")
+
+        self.generated_class = template.render(datatype=datatype_dict)
+
+
+class ComplexDatatypesGenerator:
+    """
+    A class to convert the Metaschema Datatypes into classes
+    """
+
+    # class ComplexDataType:
+    # ref_name: str
+    # class_name: str
+    # elements: list[SimpleDataType | ComplexDataType]
+    # description: str | None = None
+
+    def __init__(self, datatype_dict: dict[str, str | list[str]]):
+        # process the datatypes to make the template context to pass to the template
+        template_context = {}
+
+        template = jinja_env.get_template("class_datatype_complex.py.jinja2")
+
+        self.generated_class = template.render(datatype=datatype_dict)
