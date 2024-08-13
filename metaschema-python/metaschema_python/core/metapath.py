@@ -31,6 +31,7 @@ class Phrase():
         return True
     
 class Grammar():
+    rules: list[tuple[str, list[str]]]
     def __init__(self):
         self.rules = []
     def addRule(self, fr, to):
@@ -45,7 +46,9 @@ class OnTheFlyAutomaton():
     """
     Automaton for LR parsing that generates states with each call to shift, as opposed to calculating all possible states ahead of time.
     """
-    def __init__(self, rules):
+    rules: list[tuple[str, list[str]]] | Grammar
+    state: list[tuple[str, list[str], int]]
+    def __init__(self, rules: list[tuple[str, list[str]]] | Grammar):
         self.rules = rules
         self.state = []
         self.addToClosure(('TOP', ['S'], 0))
@@ -130,7 +133,7 @@ class Queue():
         return len(self.queue) == 0
 
 class GLR():
-    def __init__(self, grammar):
+    def __init__(self, grammar: Grammar | list[tuple[str, list[str]]]):
         self.rules = grammar
         self.input = []
         self.workspace = []
@@ -214,6 +217,7 @@ class GLR():
 
 
 class Tokenizer():
+    patterns: list[tuple[str, str]]
     def __init__(self):
         self.patterns = []
     def addToken(self, token, pattern):
@@ -325,7 +329,8 @@ class Language():
             return
         if self.exec is None:
             raise Exception('no interpreter set')
-        self.parser = GLR(self.parser)
+        if isinstance(self.parser, Grammar):
+            self.parser = GLR(self.parser)
         self.ready = True
 
 metapath = Language()
