@@ -524,7 +524,7 @@ class DatatypeModuleGenerator:
                 datatype_dict["elements"] = datatype.elements
 
                 generatedclasses.extend(
-                    ComplexDatatypesGenerator(
+                    ComplexDatatypesClassGenerator(
                         datatype_dict=datatype_dict
                     ).generated_class
                 )
@@ -579,7 +579,7 @@ class SimpleDatatypeClassGenerator:
         self.generated_class = template.render(datatype=datatype_dict)
 
 
-class ComplexDatatypesGenerator:
+class ComplexDatatypesClassGenerator:
     """
     A class to convert the Metaschema Datatypes into classes
     """
