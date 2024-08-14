@@ -8,7 +8,9 @@ from typing import cast
 import logging
 import re
 import dataclasses
-from elementpath import regex
+
+# relative import below because we need to fix the translator
+from ..elementpath import elementpath
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -252,12 +254,13 @@ class MetaschemaSetParser:
         patterns = {}
         if datatype.patterns is not None:
             # We take advantage of the fact that there's only one regex in this particular schema
-            patterns["xml"] = datatype.patterns.regexps[0]
-            # patterns["pcre"] = [
-            #     re_pattern.pattern for re_pattern in datatype.patterns.patterns
-            # ][0]
-            patterns["pcre"] = regex.patterns.translate_pattern(
-                datatype.patterns.regexps[0][0]
+            xml_pattern = datatype.patterns.regexps[0]
+            pcre_pattern = elementpath.regex.translate_pattern(xml_pattern)
+            patterns.update(
+                {
+                    "xml": xml_pattern,
+                    "pcre": pcre_pattern,
+                }
             )
 
         return SimpleRestrictionDatatype(
