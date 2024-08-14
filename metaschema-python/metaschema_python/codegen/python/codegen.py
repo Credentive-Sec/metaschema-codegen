@@ -498,6 +498,8 @@ class DatatypeModuleGenerator:
         # metaschema datatype.
         metaschema_parents = [datatype.name for datatype in datatypes]
 
+        # First pass generates the datatypes
+        simple_datatype_list = []
         for datatype in datatypes:
             if isinstance(datatype, SimpleRestrictionDatatype):
                 datatype_dict = {}
@@ -510,11 +512,8 @@ class DatatypeModuleGenerator:
 
                 datatype_dict["pattern"] = datatype.patterns["pcre"]
 
-                generatedclasses.extend(
-                    SimpleDatatypeClassGenerator(
-                        datatype_dict=datatype_dict
-                    ).generated_class
-                )
+                simple_datatype_list.append(datatype_dict)
+
             elif isinstance(datatype, ComplexDataType):
                 datatype_dict = {}
 
@@ -534,6 +533,22 @@ class DatatypeModuleGenerator:
                 raise CodeGenException(
                     "Unidentified dataclass type" + datatype.__class__.__name__
                 )
+
+        # Second pass pulls out classes without a metaschema parent
+        parent_types = [
+            type for type in simple_datatype_list if "parent" not in type.keys()
+        ]
+        for type_dict in parent_types:
+            generatedclasses.extend(
+                SimpleDatatypeClassGenerator(datatype_dict=type_dict).generated_class
+            )
+
+        # Final pass gets the rest of the types
+        child_types = [type for type in simple_datatype_list if "parent" in type.keys()]
+        for type_dict in child_types:
+            generatedclasses.extend(
+                SimpleDatatypeClassGenerator(datatype_dict=type_dict).generated_class
+            )
 
         # Finally, we are ready to generate the module source
         template_context = {}
