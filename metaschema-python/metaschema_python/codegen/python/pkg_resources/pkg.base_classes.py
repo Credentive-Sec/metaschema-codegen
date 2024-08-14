@@ -122,6 +122,8 @@ class SimpleDatatype:
     # The python datatype of corresponding to the metaschema type - will be overridden in subclass
     BASE_TYPE: type = type(None)
 
+    # TODO investigate using __new__ to actually dynamically cast the object to it's underlying type.
+
     def __init__(self, raw_value: str):
         # Check to see if the raw value string fits the pattern
         # NB: validate is a class method, so we have to resolve the class with type()
@@ -207,12 +209,6 @@ class ComplexDataType:
         """
         # TODO: how do we do this?
         return True
-
-    def __str__(self) -> str:
-        return self.__class__.__name__
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(pattern={self.__class__.PATTERN}"
 
 
 @dataclass
