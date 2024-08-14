@@ -1,6 +1,7 @@
 from metaschema_python.codegen.python.codegen import (
     PackageGenerator,
     ModuleGenerator,
+    DatatypeModuleGenerator,
     SimpleDatatypeClassGenerator,
 )
 
@@ -22,10 +23,12 @@ class TestPackageGenerator:
 
     def test_classes(self, generated_package):
         for m_gen in generated_package.module_generators:
-            assert isinstance(m_gen, ModuleGenerator)
+            assert isinstance(m_gen, ModuleGenerator) or isinstance(
+                m_gen, DatatypeModuleGenerator
+            )
 
 
 class TestDatatypesGenerator:
     def test_generate_datatypes(self, parsed_metaschema):
-        dt_gen = SimpleDatatypeClassGenerator(parsed_metaschema.datatypes)
-        assert isinstance(dt_gen.generated_class, str)
+        dt_gen = DatatypeModuleGenerator(parsed_metaschema.datatypes)
+        assert isinstance(dt_gen.generated_module, str)
