@@ -7,3 +7,6 @@
 [submodule "oscal-content"]
 	path = oscal-content
 	url = https://github.com/usnistgov/oscal-content.git
+[submodule "metaschema-python/elementpath"]
+	path = metaschema-python/metaschema_python/elementpath
+	url = https://github.com/sissaschool/elementpath.git
