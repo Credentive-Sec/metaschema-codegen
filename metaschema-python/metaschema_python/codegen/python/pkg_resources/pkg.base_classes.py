@@ -276,6 +276,19 @@ class Assembly(MetaschemaABC):
             # TODO: include information about specific constraint violated
             raise MetaschemaException("Object did not meet constraints.")
 
+    def _resolve_target(self, target: str) -> list[Assembly | Field | Flag]:
+        """
+        This function is called by a metapath object while validating a constraint. It returns the data elements that
+        match the target specified by the metapath, if any.
+
+        Args:
+            target (str): A reference to a target that may exist in this object. It must be a valid property of the object
+
+        Returns:
+            list[Assembly | Field | Flag]: A list of elements matching the target. If there are no matches, it returns an empty list.
+        """
+        pass
+
 
 class Field(MetaschemaABC):
     """
