@@ -110,10 +110,52 @@ class SimpleDatatype:
     Class Variables
     ---------------
     PATTERN (str): the pattern associated with the datatype
-    """
+    BASE_TYPE (type): the python datatype most closely matching the data
 
+    Instance Variables
+    ------------------
+    value: The value of the variable
+    """
     # The pattern associated with the datatype - will be overridden in subclasses
     PATTERN: str = "*"
+
+    # The python datatype of corresponding to the metaschema type - will be overridden in subclass
+    BASE_TYPE: type = type(None)
+
+    def __init__(self, raw_value: str):
+        # Check to see if the raw value string fits the pattern
+        # NB: validate is a class method, so we have to resolve the class with type()
+        if type(self).validate(raw_value):
+            # if so, try to convert the string value to the underlying type
+            try:
+                if type(self) == bool:
+                    SimpleDatatype.fix_bool(input=raw_value)
+                else:
+                    self.value = type(self).BASE_TYPE(raw_value)
+            except Exception as e:
+                raise MetaschemaException(
+                    f"{self.value} cannot be instantiated as {type(self).__name__}"
+                )
+
+    @staticmethod
+    def fix_bool(input: str) -> bool:
+        """
+        fix_bool is a special method to handle metaschema boolean, which can be 1 or 0 or the literals "true" or "false"
+
+        Args:
+            input (str): The thing we think might be a bool
+
+        Returns:
+            bool: a bool if the thing is a bool
+        """
+        if input in ["1", "true"]:
+            return True
+        elif input in ["0", "false"]:
+            return False
+        else:
+            raise MetaschemaException(
+                f"Value {input} is not a valid metaschema boolean."
+            )
 
     @classmethod
     def validate(cls, input: str) -> bool:
@@ -133,10 +175,10 @@ class SimpleDatatype:
             return False
 
     def __str__(self) -> str:
-        return self.__class__.__name__
+        return str(self.value)
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(pattern={self.__class__.PATTERN}"
+        return f"{type(self).__name__}({self.value})"
 
 
 class ComplexDataType:
@@ -257,6 +299,7 @@ class Metapath:
     """
     A class representing a metapath expression
     """
+
     type: str
     children: list[Metapath]
     value: None | str | int
@@ -276,11 +319,10 @@ class Metapath:
             for child in expr:
                 self.children.append(Metapath(child))
         else:
-            #expr is a Lex
+            # expr is a Lex
             self.type = expr.name
             self.value = expr.value
             self.children = []
-            
 
     def operator(self):
         pass
