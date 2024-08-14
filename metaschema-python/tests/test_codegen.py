@@ -1,4 +1,4 @@
-from metaschema_python.codegen.python.generate_classes import (
+from metaschema_python.codegen.python.codegen import (
     PackageGenerator,
     ModuleGenerator,
     SimpleDatatypeClassGenerator,
