@@ -102,6 +102,62 @@ class MetaschemaABC(metaclass=ABCMeta):
         """
 
 
+class Assembly(MetaschemaABC):
+    """
+    A class representing a generic Assembly. This is primarily used by the metaschema_python code generator and should not generally be used outside the library.
+    """
+
+    constraints: list[AssemblyConstraint] = []
+
+    def _apply_constraints(self) -> Self:
+        """
+        This function applies the constraints encoded in the assembly to the contents of the assembly. It must be called whenever an object is instantiated or changed.
+
+        Returns:
+            Self: this function returns the object if all constraints were successfully applied. Otherwise an Exception is raised.
+        """
+
+        if True:  # TODO: replace this with working code.
+            for constraint in self.__class__.constraints:
+                # process
+                pass
+            return self
+        else:
+            # TODO: include information about specific constraint violated
+            raise MetaschemaException("Object did not meet constraints.")
+
+    def _resolve_target(self, target: str) -> list[Assembly | Field | Flag]:
+        """
+        This function is called by a metapath object while validating a constraint. It returns the data elements that
+        match the target specified by the metapath, if any.
+
+        Args:
+            target (str): A reference to a target that may exist in this object. It must be a valid property of the object
+
+        Returns:
+            list[Assembly | Field | Flag]: A list of elements matching the target. If there are no matches, it returns an empty list.
+        """
+        target_list: list[Assembly | Field | Flag] = []
+
+        # Do some processing
+
+        return target_list
+
+
+class Field(MetaschemaABC):
+    """
+    A class representing a generic Field. This is primarily used by the metaschema_python code generator and should not generally be used outside the library.
+    """
+
+    constraints: list[Constraint] = []
+
+
+class Flag(MetaschemaABC):
+    """
+    A class representing a generic Flag. This is primarily used by the metaschema_python code generator and should not generally be used outside the library.
+    """
+
+
 class SimpleDatatype:
     # TODO: since the metaschema datatypes inherit from XMLSchema datatypes, can we infer a type for the datatype (e.g. xs:date -> datetime.date). We would need a dict in here to contain the mapping
     """
@@ -250,58 +306,6 @@ class FlagConstraint(Constraint):
 
 class AssemblyConstraint(Constraint):
     pass
-
-
-class Assembly(MetaschemaABC):
-    """
-    A class representing a generic Assembly. This is primarily used by the metaschema_python code generator and should not generally be used outside the library.
-    """
-
-    constraints: list[AssemblyConstraint] = []
-
-    def _apply_constraints(self) -> Self:
-        """
-        This function applies the constraints encoded in the assembly to the contents of the assembly. It must be called whenever an object is instantiated or changed.
-
-        Returns:
-            Self: this function returns the object if all constraints were successfully applied. Otherwise an Exception is raised.
-        """
-
-        if True:  # TODO: replace this with working code.
-            for constraint in self.__class__.constraints:
-                # process
-                pass
-            return self
-        else:
-            # TODO: include information about specific constraint violated
-            raise MetaschemaException("Object did not meet constraints.")
-
-    def _resolve_target(self, target: str) -> list[Assembly | Field | Flag]:
-        """
-        This function is called by a metapath object while validating a constraint. It returns the data elements that
-        match the target specified by the metapath, if any.
-
-        Args:
-            target (str): A reference to a target that may exist in this object. It must be a valid property of the object
-
-        Returns:
-            list[Assembly | Field | Flag]: A list of elements matching the target. If there are no matches, it returns an empty list.
-        """
-        pass
-
-
-class Field(MetaschemaABC):
-    """
-    A class representing a generic Field. This is primarily used by the metaschema_python code generator and should not generally be used outside the library.
-    """
-
-    constraints: list[Constraint] = []
-
-
-class Flag(MetaschemaABC):
-    """
-    A class representing a generic Flag. This is primarily used by the metaschema_python code generator and should not generally be used outside the library.
-    """
 
 
 class Metapath:
