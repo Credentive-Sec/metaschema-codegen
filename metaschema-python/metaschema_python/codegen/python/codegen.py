@@ -95,7 +95,7 @@ class Root(NamedTuple):
 
 class ImportItem(NamedTuple):
     module: str
-    classes: list[str]
+    classes: set[str]
 
 
 # Classes to parse the metaschemaset
@@ -478,7 +478,7 @@ class DatatypeModuleGenerator:
 
         # Map XML datatypes to python built-in types
         # This ignores any restrictions, e.g a positiveInteger is an int
-        TYPE_MAP = {
+        TYPE_MAP: dict[str, type] = {
             "anyURI": urllib.parse.ParseResult,
             "base64Binary": str,
             "boolean": bool,
@@ -511,6 +511,9 @@ class DatatypeModuleGenerator:
                 datatype_dict["name"] = datatype.name
 
                 datatype_dict["pattern"] = datatype.patterns["pcre"]
+
+                if datatype.base_type in TYPE_MAP.keys():
+                    datatype_dict["python_type"] = TYPE_MAP[datatype.base_type].__name__
 
                 simple_datatype_list.append(datatype_dict)
 
@@ -550,15 +553,34 @@ class DatatypeModuleGenerator:
                 SimpleDatatypeClassGenerator(datatype_dict=type_dict).generated_class
             )
 
-        # Finally, we are ready to generate the module source
         template_context = {}
         template_context["imports"] = [
             ImportItem(
-                module=".base_classes", classes=["SimpleDatatype", "ComplexDataType"]
+                module=".base_classes", classes={"SimpleDatatype", "ComplexDataType"}
             ),
-            ImportItem(module="re", classes=["Pattern", "compile"]),
+            ImportItem(module="re", classes={"Pattern", "compile"}),
         ]
 
+        # Add the imports from TYPE_MAP - we do this dynamically so we only have to update one place.
+        type_imports = {}
+        for value in TYPE_MAP.values():
+            type_name = value.__name__
+            type_module = value.__module__
+
+            if type_module != "builtins":
+                name_set = type_imports.get(type_module, set())
+                name_set.add(type_name)
+                type_imports[type_module] = name_set
+
+        for type_import in type_imports:
+            template_context["imports"].append(
+                ImportItem(
+                    module=type_import,
+                    classes=type_imports[type_import],
+                )
+            )
+
+        # Finally, we are ready to generate the module source
         template_context["classes"] = generatedclasses
 
         template = jinja_env.get_template("module.py.jinja2")
