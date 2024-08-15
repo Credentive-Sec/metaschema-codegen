@@ -15,8 +15,11 @@ class {{ datatype.name }}(SimpleDatatype):
     """
     {% if datatype.pattern -%}
     PATTERN: Pattern = compile(r"{{ datatype.pattern|safe }}")
-    {% else %}
-    pass
+    {% endif -%}
+    {%- if datatype.python_type %}
+    BASE_TYPE: type = {{ datatype.python_type }}
     {% endif %}
+
+    pass
 
     
