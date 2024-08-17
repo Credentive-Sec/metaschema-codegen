@@ -12,12 +12,14 @@ def parsed_metaschema():
     ).metaschema_set
     return ms
 
-
 @pytest.fixture(scope="module")
 def generated_package(parsed_metaschema):
+    output_path = Path("test-output")
+    if not output_path.exists():
+        output_path.mkdir()
     pg = PackageGenerator(
         parsed_metaschema,
-        Path("test-output"),
+        output_path,
         package_name="oscal",
         ignore_existing_files=True,
     )
