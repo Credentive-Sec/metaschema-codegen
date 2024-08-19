@@ -57,7 +57,7 @@ class SimpleRestrictionDatatype(DataType):
     # HACK: ref_name is how this datatype is referenced in a metaschema specification
     # The schema is busted so we have a dictionary in the class (simple_type_map)
     base_type: str
-    patterns: dict[str, str]
+    patterns: dict[str, list[str]]
 
 
 @dataclasses.dataclass
