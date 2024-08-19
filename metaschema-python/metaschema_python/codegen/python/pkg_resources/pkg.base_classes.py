@@ -3,7 +3,7 @@ from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass, field
 from typing_extensions import Self, Literal, TypeAlias, Union
 import regex
-from ....core.metapath import metapath
+from .metapath import metapath # type: ignore
 
 
 class MetaschemaException(Exception):
@@ -277,8 +277,7 @@ class Constraint:
     """
 
     # type: str  # NOTE this may not be necessary if we use subclasses
-    target: str
-    metapath: str
+    target: Metapath
     # Other values can go here.
 
     def validate(self, input: MetaschemaABC):
@@ -310,7 +309,27 @@ class ExpectConstraint(Constraint):
 
 @dataclass
 class HasCardinalityConstraint(Constraint):
-    pass
+    target: Metapath
+    min_occurs: int = 0
+    max_occurs: int = -1 #special case value for unbounded. math.inf is a float and requires an additional import
+
+    def __init__(self, tgtstr: str, mno=0, mxo=-1):
+        self.target = Metapath(tgtstr)
+        self.min_occurs = mno
+        if mxo == "unbounded":
+            self.max_occurs = -1
+        else:
+            self.max_occurs = mxo
+
+    def validate(self):
+        cardinality = len(self.target.eval())
+        if self.min_occurs != 0:
+            if cardinality < self.min_occurs:
+                return False
+        if self.max_occurs != -1:
+            if cardinality > self.max_occurs:
+                return False
+        return True
 
 
 @dataclass
@@ -380,4 +399,7 @@ class Metapath:
             self.children = []
 
     def operator(self):
+        pass
+
+    def eval(self):
         pass
