@@ -1,7 +1,7 @@
 from __future__ import annotations
 from abc import ABCMeta, abstractmethod
-from dataclasses import dataclass
-from typing_extensions import Self, Literal
+from dataclasses import dataclass, field
+from typing_extensions import Self, Literal, TypeAlias, Union
 import regex
 from ....core.metapath import metapath
 
@@ -102,6 +102,20 @@ class MetaschemaABC(metaclass=ABCMeta):
         """
 
 
+class Flag(MetaschemaABC):
+    """
+    A class representing a generic Flag. This is primarily used by the metaschema_python code generator and should not generally be used outside the library.
+    """
+
+
+class Field(MetaschemaABC):
+    """
+    A class representing a generic Field. This is primarily used by the metaschema_python code generator and should not generally be used outside the library.
+    """
+
+    constraints: list[Constraint] = []
+
+
 class Assembly(MetaschemaABC):
     """
     A class representing a generic Assembly. This is primarily used by the metaschema_python code generator and should not generally be used outside the library.
@@ -142,20 +156,6 @@ class Assembly(MetaschemaABC):
         # Do some processing
 
         return target_list
-
-
-class Field(MetaschemaABC):
-    """
-    A class representing a generic Field. This is primarily used by the metaschema_python code generator and should not generally be used outside the library.
-    """
-
-    constraints: list[Constraint] = []
-
-
-class Flag(MetaschemaABC):
-    """
-    A class representing a generic Flag. This is primarily used by the metaschema_python code generator and should not generally be used outside the library.
-    """
 
 
 class SimpleDatatype:
@@ -276,36 +276,78 @@ class Constraint:
         target: A metapath expression identifying the node the constraint applies to
     """
 
-    type: str
+    # type: str  # NOTE this may not be necessary if we use subclasses
     target: str
     metapath: str
     # Other values can go here.
 
     def validate(self, input: MetaschemaABC):
-        self.target
-        self.metapath
+        pass
 
 
-class AllowedValueConstraint(Constraint):
+@dataclass
+class LetConstraint(Constraint):
     pass
 
 
-class FlagConstraint(Constraint):
-    def __init__(self):
-        if self.type not in [
-            "let",
-            "allowed-values",
-            "expect",
-            "index-has-key",
-            "matches",
-        ]:
-            raise MetaschemaException(
-                f"Cannot define a constraint of type {self.type} on a Flag."
-            )
+@dataclass
+class AllowedValuesConstraint(Constraint):
+    # Inner class to define one of the allowed values
+    @dataclass
+    class AllowedValue:
+        value: str
+        description: str
+
+    allow_other: Literal["yes", "no"] = "no"
+    extensible: Literal["none", "model", "external"] = "model"
+    enum: list[AllowedValuesConstraint.AllowedValue] = field(default_factory=list)
 
 
-class AssemblyConstraint(Constraint):
+@dataclass
+class ExpectConstraint(Constraint):
     pass
+
+
+@dataclass
+class HasCardinalityConstraint(Constraint):
+    pass
+
+
+@dataclass
+class IndexConstraint(Constraint):
+    pass
+
+
+@dataclass
+class IndexHasKeyConstraint(Constraint):
+    pass
+
+
+@dataclass
+class IsUniqueConstraint(Constraint):
+    pass
+
+
+@dataclass
+class MatchesConstraint(Constraint):
+    pass
+
+
+# Note that constraints in flags are not allowed to define a target (the default target is .)
+FlagConstraint: TypeAlias = Union[
+    LetConstraint,
+    AllowedValuesConstraint,
+    ExpectConstraint,
+    IndexHasKeyConstraint,
+    MatchesConstraint,
+]
+
+# Fields can have the same constraints as flags
+FieldConstraint: TypeAlias = FlagConstraint
+
+AssemblyConstraint: TypeAlias = Union[
+    FlagConstraint, HasCardinalityConstraint, IndexConstraint, IsUniqueConstraint
+]
 
 
 class Metapath:
