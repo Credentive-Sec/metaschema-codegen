@@ -1,3 +1,37 @@
+# This Markdown file presents a complete MetaschemaSet for reference. It is valid python, but will not do anything useful.
+
+import dataclasses
+
+@dataclasses.dataclass
+class DataType:
+    ref_name: str
+    name: str
+    documentation: str | None
+    
+@dataclasses.dataclass
+class SimpleRestrictionDatatype(DataType):
+    base_type: str
+    patterns: dict[str, list[str]]
+
+@dataclasses.dataclass
+class ComplexDataType(DataType):
+    elements: list[str]
+
+
+@dataclasses.dataclass
+class Metaschema:
+    file: str
+    short_name: str
+    imports: list[str]
+    globals: dict[str, str]
+    roots: list[str]
+    schema_dict: dict
+
+@dataclasses.dataclass
+class MetaSchemaSet:
+    datatypes: list[SimpleRestrictionDatatype | ComplexDataType] 
+    metaschemas: list[Metaschema] 
+
 parsed_metaschema = MetaSchemaSet(
     datatypes=[
         SimpleRestrictionDatatype(
