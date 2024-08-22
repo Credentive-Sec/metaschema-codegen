@@ -462,15 +462,13 @@ class ConstraintsGenerator:
     A class to convert a set of constraints into a format that can be fed to a code generation template.
     """
 
-    def __init__(self, constraint_dict: dict[str, dict]):
+    def __init__(self, constraint_dict: dict[str, dict]) -> None:
         """
         __init__ Recursively parses a constraint and produces a template context.
 
         Args:
             constraint_dict (dict): "constraint" dictionary parsed from a metaschema element.
         """
-        # TODO: This is extremely primitive! We will do better when we have a more defined
-        # approach for constraints
         self.constraint_values = []
 
         """
@@ -492,14 +490,17 @@ class ConstraintsGenerator:
         """
 
         template_context = {}
-        for constraint_type, constraints_of_type in constraint_dict.items():
-            for constraint in constraints_of_type:
-                template_context = self._process_constraint(
-                    constraint_type=constraint_type, constraint_dict=constraint
+
+        constraints_classes = []
+        for constraint_type, constraints_of_type in constraint_dict.values():
+            if constraint_type == "allowed-values":
+                constraints_classes.extend(
+                    AllowedValueConstraintsGenerator(
+                        constraints_of_type
+                    ).constraint_classes
                 )
-                self.constraint_values.append(
-                    self._generate(template_context=template_context)
-                )
+            else:
+                raise CodeGenException("Unrecognized or unimplemented constraint type")
 
     def _process_constraint(self, constraint_type: str, constraint_dict: dict) -> dict:
         """
@@ -566,6 +567,27 @@ class ConstraintsGenerator:
         template = jinja_env.get_template("constraints.py.jinja2")
         constraint_class = template.render(template_context)
         return constraint_class
+
+
+class AllowedValueConstraintsGenerator:
+    def __init__(self, constraints: list[dict]) -> None:
+        self.constraint_classes: list[dict] = []
+
+        for constraint in constraints:
+            target = constraint.get("@target", ".")
+            allow_other = constraint.get("@allow-other", "no")
+            level = constraint.get("@level", "ERROR")
+            extensible = constraint.get("@extensible", "model")
+            constraint_enums = []
+            for enum in constraint.get("enum", []):
+                try:
+                    # value is mandatory with no default, so it's okay if we raise an exception here
+                    value = enum["@value"]
+                except KeyError as e:
+                    raise CodeGenException(
+                        f"No value in enum under constraint {target}"
+                    )
+                # TODO: figure out how to handle the contents of the tag (e.g. the description)
 
 
 class DatatypeModuleGenerator:
