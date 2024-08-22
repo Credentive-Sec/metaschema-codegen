@@ -402,4 +402,120 @@ class Metapath:
         pass
 
     def eval(self):
-        pass
+        match(self.type+str(len(self.children))):
+            case("metapath1"):
+                return self.children[0].eval()
+            case("expr1"):
+                return [self.children[0].eval()]
+            case("expr3"):
+                return self.children[0].eval().append(self.children[2].eval())
+            case("exprsingle1"):
+                return self.children[0].eval()
+            case("orexpr1"):
+                return self.children[0].eval()
+            case("orexpr3"):
+                return self.children[0].eval() or self.children[2].eval()
+            case("andexpr1"):
+                return self.children[0].eval()
+            case("andexpr3"):
+                return self.children[0].eval() and self.children[2].eval()
+            case("comparisonexpr1"):
+                return self.children[0].eval()
+            case("comparisonexpr3"):
+                match(self.children[1].eval()):
+                    case("eq" | "="):
+                        return self.children[0].eval() == self.children[2].eval()
+                    case("ne" | "!="):
+                        return self.children[0].eval() != self.children[2].eval()
+                    case("lt" | "<"):
+                        return self.children[0].eval() < self.children[2].eval()
+                    case("le" | "<="):
+                        return self.children[0].eval() <= self.children[2].eval()
+                    case("gt" | ">"):
+                        return self.children[0].eval() > self.children[2].eval()
+                    case("ge" | ">="):
+                        return self.children[0].eval() >= self.children[2].eval()
+            case("stringconcatexpr1"):
+                return self.children[0].eval()
+            case("stringconcatexpr3"):
+                return str(self.children[0].eval()) + self.children[2].eval()
+            case("rangeexpr1"):
+                return self.children[0].eval()
+            case("additiveexpr1"):
+                return self.children[0].eval()
+            case("additiveexpr3"):
+                if self.children[1].eval() == "+":
+                    return self.children[0].eval() + self.children[2].eval()
+                else:
+                    return self.children[0].eval() - self.children[2].eval()
+            case("multiplicativeexpr1"):
+                return self.children[0].eval()
+            case("multiplicativeexpr3"):
+                match(self.children[1].eval()):
+                    case("*"):
+                        return self.children[0].eval() * self.children[2].eval()
+                    case("div"):
+                        return self.children[0].eval() / self.children[2].eval()
+                    case("idiv"):
+                        return self.children[0].eval() // self.children[2].eval()
+                    case("mod"):
+                        return self.children[0].eval() % self.children[2].eval()
+            case("unionexpr1"):
+                return self.children[0].eval()
+            case("interceptexceptexpr1"):
+                return self.children[0].eval()
+            case("arrowexpr1"):
+                return self.children[0].eval()
+            case("unaryexpr1"):
+                return self.children[0].eval()
+            case("valueexpr1"):
+                return self.children[0].eval()
+            case("simplemapexpr1"):
+                return self.children[0].eval()
+            case("pathexpr1"):
+                pass
+            case("pathexpr2"):
+                pass
+            case("relativepathexpr1"):
+                return [self.children[0].eval()]
+            case("relativepathexpr3"):
+                base = self.children[0].eval()
+                name = self.children[2].eval()
+                toret = []
+                for item in base:
+                    toret.extend(item._resolve_target(name))
+                return toret
+            case("relativepathexpr4"):
+                #TODO: predication
+                pass
+            case("stepexpr1"):
+                return self.children[0].eval()
+            case("axisstep1"):
+                return self.children[0].eval()
+            case("forwardstep1"):
+                return self.children[0].eval()
+            case("abbrevforwardstep1"):
+                return self.children[0].eval()
+            case("abbrevforwardstep2"):
+                return "@"+self.children[1].eval()
+            case("reversestep1"):
+                pass
+            case("abbrevreversestep1"):
+                pass
+            case("nametest1"):
+                return self.children[0].eval()
+            case("postfixexpr1"):
+                return self.children[0].eval()
+            case("primaryexpr1"):
+                return self.children[0].eval()
+            case("literal1"):
+                return self.children[0].eval()
+            case("numericliteral1"):
+                return self.children[0].eval()
+            # ...
+            case("parenthesizedexpr3"):
+                return self.children[1].eval()
+            case("eqname1"):
+                #maybe we should pythonize the name here
+                return self.children[0].eval()
+        return self.value
