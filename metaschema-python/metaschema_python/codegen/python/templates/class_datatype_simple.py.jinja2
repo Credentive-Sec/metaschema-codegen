@@ -18,8 +18,7 @@ class {{ datatype.name }}(SimpleDatatype):
     {% endif -%}
     {%- if datatype.python_type %}
     BASE_TYPE: type = {{ datatype.python_type }}
-    {% endif %}
-
-    pass
+    {%- endif %}
+    {% if not datatype.pattern and not datatype.python_type %}pass{% endif %}
 
     
