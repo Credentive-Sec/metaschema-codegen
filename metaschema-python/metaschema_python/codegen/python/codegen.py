@@ -236,6 +236,10 @@ class PackageGenerator:
                 base_classes_file.read_text()
             )
 
+        pkg_metapath = resources.files(pkg_resources).joinpath("pkg.metapath.py")
+        with resources.as_file(pkg_metapath) as metapath_file:
+            package_path.joinpath("metapath.py").write_text(metapath_file.read_text())
+
         for module_generator in self.module_generators:
             module_file = package_path.joinpath(
                 Path(f"{module_generator.module_name}.py")
