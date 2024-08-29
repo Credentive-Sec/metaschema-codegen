@@ -6,9 +6,13 @@ This project uses [poetry](https://python-poetry.org/) for development and packa
 
 The project team uses a [develoment container](https://containers.dev/) to simplify development, which works well in Visual Studio Code. If you clone the repository in VS Code, you should be prompted to reopen the project in a dev container.
 
-## Use `Dev` Branch
+## Use 'dev' Branch
 
 Immediately after cloning the repository, switch to the 'dev' branch. This is where development is occuring, and it differs significantly from the main branch.
+
+```sh
+git switch dev
+```
 
 ## Install Submodules
 
