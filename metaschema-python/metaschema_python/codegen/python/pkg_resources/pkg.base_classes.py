@@ -403,13 +403,21 @@ class Metapath:
         pass
 
     def eval(self, location):
+        #if not isinstance(location, list):
+        #    location = [location]
         match(self.type+str(len(self.children))):
+            case("S1"):
+                #return self.children[0].eval(location).pop()
+                return self.children[0].eval(location)
             case("metapath1"):
                 return self.children[0].eval(location)
             case("expr1"):
-                return [self.children[0].eval(location)]
+                #return [self.children[0].eval(location)]
+                return self.children[0].eval(location)
             case("expr3"):
-                return self.children[0].eval(location).append(self.children[2].eval(location))
+                #return self.children[0].eval(location).extend(self.children[2].eval(location))
+                self.children[0].eval(location)
+                return self.children[2].eval(location)
             case("exprsingle1"):
                 return self.children[0].eval(location)
             case("orexpr1"):
@@ -423,19 +431,21 @@ class Metapath:
             case("comparisonexpr1"):
                 return self.children[0].eval(location)
             case("comparisonexpr3"):
+                lhs = self.children[0].eval(location)
+                rhs = self.children[2].eval(location)
                 match(self.children[1].eval(location)):
                     case("eq" | "="):
-                        return self.children[0].eval(location) == self.children[2].eval(location)
+                        return lhs == rhs
                     case("ne" | "!="):
-                        return self.children[0].eval(location) != self.children[2].eval(location)
+                        return lhs != rhs
                     case("lt" | "<"):
-                        return self.children[0].eval(location) < self.children[2].eval(location)
+                        return lhs < rhs
                     case("le" | "<="):
-                        return self.children[0].eval(location) <= self.children[2].eval(location)
+                        return lhs <= rhs
                     case("gt" | ">"):
-                        return self.children[0].eval(location) > self.children[2].eval(location)
+                        return lhs > rhs
                     case("ge" | ">="):
-                        return self.children[0].eval(location) >= self.children[2].eval(location)
+                        return lhs >= rhs
             case("stringconcatexpr1"):
                 return self.children[0].eval(location)
             case("stringconcatexpr3"):
@@ -463,7 +473,7 @@ class Metapath:
                         return self.children[0].eval(location) % self.children[2].eval(location)
             case("unionexpr1"):
                 return self.children[0].eval(location)
-            case("interceptexceptexpr1"):
+            case("intersectexceptexpr1"):
                 return self.children[0].eval(location)
             case("arrowexpr1"):
                 return self.children[0].eval(location)
@@ -474,21 +484,35 @@ class Metapath:
             case("simplemapexpr1"):
                 return self.children[0].eval(location)
             case("pathexpr1"):
-                pass
+                #either this is just / (with nothing following) or it is a relative path
+                if self.children[0].type == 'relativepathexpr':
+                    #relative path
+                    return self.children[0].eval(location)
+                else:
+                    #just /
+                    pass
             case("pathexpr2"):
                 pass
             case("relativepathexpr1"):
-                return [self.children[0].eval(location)]
+                #based off of the location
+                if self.children[0].children[0].type == 'axisstep':
+                    return location._resolve_target(self.children[0].eval(location))
+                else: #postfixexpr
+                    return self.children[0].eval(location)
             case("relativepathexpr3"):
-                base = self.children[0].eval(location)
-                name = self.children[2].eval(location)
+                base = self.children[0].eval(location) #relativepathexpr: returns a list of locations
+                name = self.children[2].eval(location) #stepexpr: returns a string
                 toret = []
                 for item in base:
                     toret.extend(item._resolve_target(name))
                 return toret
             case("relativepathexpr4"):
-                #TODO: predication
-                pass
+                base = self.children[0].eval(location)
+                toret = []
+                for item in base:
+                    if self.children[2].eval(item):
+                        toret.append(item)
+                return toret
             case("stepexpr1"):
                 return self.children[0].eval(location)
             case("axisstep1"):
@@ -519,4 +543,6 @@ class Metapath:
             case("eqname1"):
                 #maybe we should pythonize the name here
                 return self.children[0].eval(location)
+        if self.value is None:
+            return self.children[0].eval(location)
         return self.value
