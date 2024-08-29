@@ -1,0 +1,24 @@
+
+{% if datatype.parent %}
+class {{ datatype.name }}({{ datatype.parent }}):
+{% else %}
+class {{ datatype.name }}(SimpleDatatype):
+{%- endif %}
+    """
+    This class defines the simple type{{ datatype.name }} from the metaschema specification.
+    {% if datatype.pattern %}
+    It stores the unique pattern for the datatype, but leverages the 'validate' classmethod from the Datatype superclass.
+    {% endif %}
+    {% if datatype.parent -%}
+    It is a subclass of {{ datatype.parent }}
+    {%- endif %}
+    """
+    {% if datatype.pattern -%}
+    PATTERN: Pattern = compile(r"{{ datatype.pattern|safe }}")
+    {% endif -%}
+    {%- if datatype.python_type %}
+    BASE_TYPE: type = {{ datatype.python_type }}
+    {%- endif %}
+    {% if not datatype.pattern and not datatype.python_type %}pass{% endif %}
+
+    

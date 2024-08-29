@@ -1,0 +1,13 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+{% if imports -%}
+{%- for import in imports %}
+from {{ import.module }} import {{ import.classes|join(', ') }}
+{% endfor -%}
+{%- endif -%}
+
+{%- for class in classes -%}
+{{ class }}
+{%- endfor -%}

@@ -1,7 +1,9 @@
 import argparse
 import sys
 
-from .core.metaschema_parser import MetaschemaParser
+from .core.schemaparse import MetaschemaSetParser
+
+# from .core.assembly import Context
 
 
 # Parse the command arguments
@@ -26,19 +28,21 @@ parser.add_argument(
     dest="schema",
     help="[optional] The location of the metaschema xsd file.",
 )
+parser.add_argument(
+    "-N",
+    "--name",
+    dest="package_name",
+    help="The name of the package to generate. This should be the name of the specification (e.g. oscal)",
+)
 
 args = parser.parse_args()
 
 
 # Parse all of the metaschema definitions into trees.
 try:
-    metaschema_parser = MetaschemaParser(
-        location=args.location,
-        schema_file="/home/vscode/metaschema-python/metaschema/schema/xml/metaschema.xsd",
-    )
-    metaschema_contents = metaschema_parser.parse()
-
-
+    metaschema_dict = MetaschemaSetParser(metaschema_location=args.location)
 except Exception as e:
     print("Error parsing metaschema:", e)
     sys.exit(1)
+
+print("finished")
