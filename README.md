@@ -87,6 +87,7 @@ Breakpoints can be added added at various points to inspect the data structures 
 
 - metaschema-python/metaschema_python/core/schemaparse.py line 134: the "metaschema_schema" variable shows the contents of the internal representation of the metaschema xsd. See "metaschema_schema.complex_types" and "metaschema_schema.simple_types" for the items we use most.
 - metaschema-python/tests/test_codegen.py line 13: the "ms" variable has a complete MetaschemaSet object
+- metaschema-python/tests/conftest.py line 26: The "pg" variable contains a complete generated package.
 
 ### Other documentation
 
