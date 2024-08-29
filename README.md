@@ -47,3 +47,17 @@ Submodule path 'oscal-content': checked out '941c978d14c57379fbf6f7fb388f675067d
 ## Setup virtual env
 
 Poetry has been configured to install a virtual env inside the project directory, since VS Code prefers that configuration.
+
+Change to the directory containing the pyproject.toml
+
+```sh
+cd metaschema-python
+```
+
+Generate the virtual environment 
+
+```sh
+poetry shell
+```
+
+This command will read the poetry configuration, generate a virtual environment, and activate it in the current terminal. It may be necessary to reload the VS Code window for VS Code to pick up and activate the new virtual environment.
