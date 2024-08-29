@@ -58,10 +58,36 @@ Change to the directory containing the pyproject.toml
 cd metaschema-python
 ```
 
-Generate the virtual environment 
+### Generate the virtual environment. 
+This command will read the poetry configuration, generate a virtual environment, and activate it in the current terminal.
 
 ```sh
 poetry shell
 ```
 
-This command will read the poetry configuration, generate a virtual environment, and activate it in the current terminal. It may be necessary to reload the VS Code window for VS Code to pick up and activate the new virtual environment.
+### Install poetry dependencies
+This command will install the appropriate vesions of all dependencies in the project.
+
+```sh
+poetry install
+```
+
+ It may be necessary to reload the VS Code window for VS Code to pick up and activate the new virtual environment and installed dependencies ("Developer: Reload Window").
+
+
+ ## Tests
+
+ Tests should automatically be discovered, however the tests that are included in the imported "elementpath" module are not complete. A "pytest Discovery Error" will appear, but can be ignored. 
+
+ ### Useful Tests
+
+To generate the python package source code, run the "test_package_generator" test. The generated code will appear in the "test-output/oscal" directory under the main project directory. 
+ 
+Breakpoints can be added added at various points to inspect the data structures used for code generation:
+
+- metaschema-python/metaschema_python/core/schemaparse.py line 134: the "metaschema_schema" variable shows the contents of the internal representation of the metaschema xsd. See "metaschema_schema.complex_types" and "metaschema_schema.simple_types" for the items we use most.
+- metaschema-python/tests/test_codegen.py line 13: the "ms" variable has a complete MetaschemaSet object
+
+### Other documentation
+
+The "design-docs" folder contains some useful notes, and is a general folder for putting things that we refer to frequently during development. See "parsing-samples.md" for a dump of the metaschema-schema object.
