@@ -571,5 +571,7 @@ class Metapath:
 # root.location.subelements[2].example = 5
 # root.location.subelements[2].selector = 5
 
-# mp = Metapath("location/subelements[selector > 2]/example[0]")
+# mp = Metapath("location/subelements[selector > 2]/example")
 # print(mp.eval(root)[0])
+
+# expects 4 to be printed
