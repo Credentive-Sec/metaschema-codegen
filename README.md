@@ -13,7 +13,7 @@ Metaschema-codegen has a two phase approach to generating code from a metaschema
 
 Both of these steps have many sub-processes, but this design allows a developer to modify the second step to produce a library in another programming language without needing to develop a parser for metaschema. 
 
-## What the library provides for you
+## What the library provides for you (the developer)
 
 By parsing the metaschema, the library will provide the following elements:
 
@@ -21,7 +21,7 @@ By parsing the metaschema, the library will provide the following elements:
 - Complex Datatypes (Markup Types, fields, flags and assemblies), including the definition of the structures and references to datatypes for primitive elements
 - Information about cross-references between metaschema elements defined in different schema documents.
 
-## What the developer provides for a language specific implementation
+## What you (the developer) provides for a language specific implementation
 
 The library provides information about the structure of defined metaschema, but a language implementation should provide the following elements:
 
