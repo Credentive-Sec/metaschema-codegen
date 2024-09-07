@@ -1,9 +1,11 @@
 from __future__ import annotations
+import importlib.abc
 import urllib.parse
 
 import jinja2
-from importlib import resources
-from typing import NamedTuple, cast
+import importlib
+import importlib.resources
+import typing
 from pathlib import Path
 
 import datetime
@@ -45,7 +47,7 @@ jinja_env = jinja2.Environment(
 #
 
 
-class GlobalReference(NamedTuple):
+class GlobalReference(typing.NamedTuple):
     """
     A NamedTuple to represent an element exported from a metaschema by being tagged "global". This is used to simplify
     generation of import statements and references in one module to classes defined in another module.
@@ -63,7 +65,7 @@ class GlobalReference(NamedTuple):
     class_name: str  # The class name of the element in the module
 
 
-class GeneratedClass(NamedTuple):
+class GeneratedClass(typing.NamedTuple):
     """
     A NamedTuple representing the result of processing a metaschema element
 
@@ -76,7 +78,7 @@ class GeneratedClass(NamedTuple):
     refs: list[str]
 
 
-class GeneratedConstraint(NamedTuple):
+class GeneratedConstraint(typing.NamedTuple):
     """
     A Named Tuple representing the result of processing a constraint with a template
     """
@@ -84,7 +86,7 @@ class GeneratedConstraint(NamedTuple):
     code: str
 
 
-class Root(NamedTuple):
+class Root(typing.NamedTuple):
     """
     A Class to represent a the root of a document that containts a Metaschema compliant structure, used to collect all the metaschema
     assemblies with a 'root-name' attribute. This class is not referenced directly in metascheama, but must exist for a
@@ -94,7 +96,7 @@ class Root(NamedTuple):
     root_elements: list[str]
 
 
-class ImportItem(NamedTuple):
+class ImportItem(typing.NamedTuple):
     module: str
     classes: set[str]
 
@@ -224,27 +226,24 @@ class PackageGenerator:
 
         package_path.mkdir(exist_ok=ignore_existing_files)
 
-        pkg_init = resources.files(pkg_resources).joinpath("pkg.__init__.py")
-        with resources.as_file(pkg_init) as init_file:
-            package_path.joinpath("__init__.py").write_text(init_file.read_text())
-
-        pkg_base_classes = resources.files(pkg_resources).joinpath(
-            "pkg.base_classes.py"
-        )
-        with resources.as_file(pkg_base_classes) as base_classes_file:
-            package_path.joinpath("base_classes.py").write_text(
-                base_classes_file.read_text()
-            )
-
-        pkg_metapath = resources.files(pkg_resources).joinpath("pkg.metapath.py")
-        with resources.as_file(pkg_metapath) as metapath_file:
-            package_path.joinpath("metapath.py").write_text(metapath_file.read_text())
+        # Get all of the package resource files
+        for resource_file in importlib.resources.files(pkg_resources).iterdir():
+            if resource_file.is_file() and resource_file.name.startswith("pkg."):
+                self._copy_resource_file_to_pkg(resource_file, package_path)
 
         for module_generator in self.module_generators:
             module_file = package_path.joinpath(
                 Path(f"{module_generator.module_name}.py")
             )
             module_file.write_text(module_generator.generated_module)
+
+    def _copy_resource_file_to_pkg(
+        self, resource_file: importlib.abc.Traversable, package_path
+    ):
+        # The file will be written to the package directory without the leading "pkg." in the filename
+        target_filename = resource_file.name.lstrip("pkg.")
+        with importlib.resources.as_file(resource_file) as r_file:
+            package_path.joinpath(target_filename).write_text(r_file.read_text())
 
     def _check_directory(
         self, path_to_check: Path, ignore_existing_files: bool
@@ -279,9 +278,9 @@ class MetaschemaModuleGenerator:
         self, metaschema: Metaschema, global_refs: list[GlobalReference]
     ) -> None:
         self.metaschema = metaschema
-        self.version = cast(str, metaschema.schema_dict["schema-version"])
+        self.version = typing.cast(str, metaschema.schema_dict["schema-version"])
         self.module_name = _pythonize_name(
-            cast(str, metaschema.schema_dict["short-name"])
+            typing.cast(str, metaschema.schema_dict["short-name"])
         )
         self.generated_classes: list[GeneratedClass] = []
 
