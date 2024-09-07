@@ -1,5 +1,9 @@
 # Overview of Metaschema-Codegen
 
+## IMPORTANT NOTES 
+
+**IMPORTANT** Please note that the directory "metaschema-python/metaschema_python/elementpath" contains a patched version of a github repo. The PR for the patch has been accepted, but the patched version has not been published to PyPi yet, so we are maintaining the link. This will change when the a new version of the [elementpath library](https://pypi.org/project/elementpath/) is published, so don't rely on the directory being there.
+
 ## Purpose
 
 The Metaschema-codegen library and application is designed to parse a schema designed in the Metaschema lanaguage and generate a source library that implements the schema using a clear and idiomatic API. The generated library is intended to be standalone, with minimal dependencies beyond those provided by the language's standard library.
