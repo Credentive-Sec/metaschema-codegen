@@ -1,4 +1,4 @@
-from metaschema_python.core.schemaparse import MetaSchemaSet
+from metaschema_codegen.core.schemaparse import MetaSchemaSet
 
 
 class TestSchemaParser:

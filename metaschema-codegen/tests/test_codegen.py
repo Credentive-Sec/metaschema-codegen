@@ -1,4 +1,4 @@
-from metaschema_python.codegen.python.codegen import (
+from metaschema_codegen.codegen.python.codegen import (
     PackageGenerator,
     MetaschemaModuleGenerator,
     DatatypeModuleGenerator,

@@ -11,6 +11,9 @@ class {{ class_name }}(Flag):
     name: str = "{{ flag_name }}"
     type = {{ datatype }}
 
-    {%- if constraint -%}
-    {{ constraint.class_code }}
-    {%- endif -%}
+    {%- if constraints %}
+    constraints = [{%- for constraint in constraints -%}
+    {{ constraint }}
+    {%- endfor -%}
+    ]
+    {%- endif %}

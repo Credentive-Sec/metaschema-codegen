@@ -100,7 +100,7 @@ An alternative approach is the use of metaprogramming via the python metaclass. 
 For this approach, a single library will be provided, and loading a schema defined in metaschema will be an API call, similar to the following:
 
 ```
-schema = metaschema_python.generate("<Metaschema File>")
+schema = metaschema_codegen.generate("<Metaschema File>")
 ```
 
 The contents of the schema could be exposed as attributes that return classes or functions implementing the desired functionality as documented here.

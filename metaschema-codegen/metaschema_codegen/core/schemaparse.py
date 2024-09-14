@@ -10,7 +10,7 @@ import re
 import dataclasses
 
 # relative import below because we need to fix the translator
-from ..elementpath import elementpath
+import elementpath
 
 logging.basicConfig(level=logging.DEBUG)
 

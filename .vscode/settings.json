@@ -1,6 +1,6 @@
 {
     "python.testing.pytestArgs": [
-        "metaschema-python"
+        "metaschema-codegen"
     ],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,

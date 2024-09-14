@@ -1,0 +1,13 @@
+{# These will be added to the CONSTRAINTS class list #}
+        {% for constraint in constraints -%}
+        AllowedValuesConstraint(
+            target = "{{ constraint.target }}",
+            level = "{{ constraint.level }}",
+            extensible = "{{ constraint.extensible }}",
+            enums = [
+                {% for enum in constraint.enums -%}
+                AllowedValuesConstraint.AllowedValueEnum(value = "{{ enum.value }}"),
+                {% endfor -%}
+            ]
+        )
+        {% endfor %}

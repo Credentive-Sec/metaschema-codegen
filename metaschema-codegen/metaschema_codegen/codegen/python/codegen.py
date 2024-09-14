@@ -1,9 +1,11 @@
 from __future__ import annotations
+import importlib.abc
 import urllib.parse
 
 import jinja2
-from importlib import resources
-from typing import NamedTuple, cast
+import importlib
+import importlib.resources
+import typing
 from pathlib import Path
 
 import datetime
@@ -37,7 +39,7 @@ def _pythonize_name(name: str) -> str:
 
 # Intialize the jinja environment
 jinja_env = jinja2.Environment(
-    loader=jinja2.PackageLoader(package_name="metaschema_python.codegen.python")
+    loader=jinja2.PackageLoader(package_name="metaschema_codegen.codegen.python")
 )
 
 #
@@ -45,7 +47,7 @@ jinja_env = jinja2.Environment(
 #
 
 
-class GlobalReference(NamedTuple):
+class GlobalReference(typing.NamedTuple):
     """
     A NamedTuple to represent an element exported from a metaschema by being tagged "global". This is used to simplify
     generation of import statements and references in one module to classes defined in another module.
@@ -63,7 +65,7 @@ class GlobalReference(NamedTuple):
     class_name: str  # The class name of the element in the module
 
 
-class GeneratedClass(NamedTuple):
+class GeneratedClass(typing.NamedTuple):
     """
     A NamedTuple representing the result of processing a metaschema element
 
@@ -76,7 +78,7 @@ class GeneratedClass(NamedTuple):
     refs: list[str]
 
 
-class GeneratedConstraint(NamedTuple):
+class GeneratedConstraint(typing.NamedTuple):
     """
     A Named Tuple representing the result of processing a constraint with a template
     """
@@ -84,7 +86,7 @@ class GeneratedConstraint(NamedTuple):
     code: str
 
 
-class Root(NamedTuple):
+class Root(typing.NamedTuple):
     """
     A Class to represent a the root of a document that containts a Metaschema compliant structure, used to collect all the metaschema
     assemblies with a 'root-name' attribute. This class is not referenced directly in metascheama, but must exist for a
@@ -94,7 +96,7 @@ class Root(NamedTuple):
     root_elements: list[str]
 
 
-class ImportItem(NamedTuple):
+class ImportItem(typing.NamedTuple):
     module: str
     classes: set[str]
 
@@ -143,7 +145,7 @@ class PackageGenerator:
         self.generate_global_reference_list()
 
         # generate modules for all of the schemas parsed.
-        # self.generate_schema_modules()
+        self.generate_schema_modules()
 
         # write the generated code to files in a directory.
         self.write_package(ignore_existing_files=ignore_existing_files)
@@ -224,27 +226,24 @@ class PackageGenerator:
 
         package_path.mkdir(exist_ok=ignore_existing_files)
 
-        pkg_init = resources.files(pkg_resources).joinpath("pkg.__init__.py")
-        with resources.as_file(pkg_init) as init_file:
-            package_path.joinpath("__init__.py").write_text(init_file.read_text())
-
-        pkg_base_classes = resources.files(pkg_resources).joinpath(
-            "pkg.base_classes.py"
-        )
-        with resources.as_file(pkg_base_classes) as base_classes_file:
-            package_path.joinpath("base_classes.py").write_text(
-                base_classes_file.read_text()
-            )
-
-        pkg_metapath = resources.files(pkg_resources).joinpath("pkg.metapath.py")
-        with resources.as_file(pkg_metapath) as metapath_file:
-            package_path.joinpath("metapath.py").write_text(metapath_file.read_text())
+        # Get all of the package resource files
+        for resource_file in importlib.resources.files(pkg_resources).iterdir():
+            if resource_file.is_file() and resource_file.name.startswith("pkg."):
+                self._copy_resource_file_to_pkg(resource_file, package_path)
 
         for module_generator in self.module_generators:
             module_file = package_path.joinpath(
                 Path(f"{module_generator.module_name}.py")
             )
             module_file.write_text(module_generator.generated_module)
+
+    def _copy_resource_file_to_pkg(
+        self, resource_file: importlib.abc.Traversable, package_path
+    ):
+        # The file will be written to the package directory without the leading "pkg." in the filename
+        target_filename = resource_file.name.lstrip("pkg.")
+        with importlib.resources.as_file(resource_file) as r_file:
+            package_path.joinpath(target_filename).write_text(r_file.read_text())
 
     def _check_directory(
         self, path_to_check: Path, ignore_existing_files: bool
@@ -279,9 +278,9 @@ class MetaschemaModuleGenerator:
         self, metaschema: Metaschema, global_refs: list[GlobalReference]
     ) -> None:
         self.metaschema = metaschema
-        self.version = cast(str, metaschema.schema_dict["schema-version"])
+        self.version = typing.cast(str, metaschema.schema_dict["schema-version"])
         self.module_name = _pythonize_name(
-            cast(str, metaschema.schema_dict["short-name"])
+            typing.cast(str, metaschema.schema_dict["short-name"])
         )
         self.generated_classes: list[GeneratedClass] = []
 
@@ -396,17 +395,16 @@ class FlagClassGenerator:
         datatype = class_dict["@as-type"]
         datatype_class = refs[datatype]
 
-        template_context = {}
+        template_context: dict[str, str | list[str]] = {}
         template_context["flag_name"] = _pythonize_name(class_dict["@name"])
         template_context["class_name"] = _pythonize_name(class_dict["formal-name"])
         template_context["datatype"] = datatype_class
         template_context["description"] = class_dict.get("description", None)
 
         # Build constraints
-        # NOT WORKING AT THE MOMENT
-        # template_context["constraints"] = ConstraintsGenerator(
-        #     constraint_dict=class_dict.get("constraint", {})
-        # ).constraint_classes
+        template_context["constraints"] = ConstraintsGenerator(
+            constraint_dict=class_dict.get("constraint", {})
+        ).constraints_classes
 
         template = jinja_env.get_template("class_flag.py.jinja2")
 
@@ -473,11 +471,11 @@ class ConstraintsGenerator:
         Args:
             constraint_dict (dict): "constraint" dictionary parsed from a metaschema element.
         """
-        self.constraint_values = []
 
         """
         NOTE: 
-        constraints are structured as a dict of lists of dicts
+        constraints are structured as a dict, with the type as key and the details as value
+        if there is only a single constraint of a type, it will be a dict. if there is more than one, it will be a list of dicts
         "constraint" : {
           "type": [ (constraints_by_type)
               {
@@ -493,97 +491,52 @@ class ConstraintsGenerator:
         }
         """
 
-        template_context = {}
+        self.constraints_classes = []
+        for constraint_type, constraints_of_type in constraint_dict.items():
+            # constraints_of_type can be a list of dicts or a single dict.
+            # It's easier to process if they are all the same, so if it's a dict,
+            # we make it a list with a single member.
+            if isinstance(constraints_of_type, dict):
+                constraints_of_type = [constraints_of_type]  # now it's a list :)
 
-        constraints_classes = []
-        for constraint_type, constraints_of_type in constraint_dict.values():
             if constraint_type == "allowed-values":
-                constraints_classes.extend(
+                self.constraints_classes.append(
                     AllowedValueConstraintsGenerator(
                         constraints_of_type
                     ).constraint_classes
                 )
             else:
-                raise CodeGenException("Unrecognized or unimplemented constraint type")
+                pass
+                # TODO: Uncomment the thing below once we have the core constraints implemented.
+                # raise CodeGenException("Unrecognized or unimplemented constraint type")
 
-    def _process_constraint(self, constraint_type: str, constraint_dict: dict) -> dict:
-        """
-        Generates a dictionary representing a constraint for use in a template
-
-        Args:
-            constraint_type (str): the type of the constraint
-            constraint_dict (dict): the dictionary containing the constraint details
-
-        Returns:
-            dict: _description_
-        """
-        processed_constraint = {}
-        processed_constraint["class"] = self._get_constraint_class_for_type(
-            constraint_type=constraint_type
-        )
-        for key, value in constraint_dict:
-            if type(value) == str:
-                processed_constraint[key] = [value]
-            elif type(value) == list:
-                processed_constraint[key] = self._process_element_list(
-                    element_list=value
-                )
-        return processed_constraint
-
-    def _get_constraint_class_for_type(self, constraint_type: str) -> str:
-        """
-        Returns the class identifier for a constraint type - relies on a naming convention:
-        "const-name" -> ConstNameConstraint
-
-        Args:
-            constraint_type (str): the constraint type identified in the schema
-
-        Returns:
-            str: the name of a constraint class
-        """
-        class_name_components = constraint_type.split("-")
-        capitalized_name_components = [
-            component.capitalize() for component in class_name_components
-        ]
-        capitalized_name_components.append("Constraint")
-        return "".join(capitalized_name_components)
-
-    def _process_element_list(self, element_list: list) -> list:
-        """
-        If a constraint element is a list of values, process them and return a list of the processed elements
-
-        Args:
-            element_list (list): the list of elements to be processed
-
-        Returns:
-            list: the list of processed elements
-        """
-        processed_element_list = []
-
-        for key, value in element_list:
-            processed_key: str
-            if key == "$":
-                processed_key = "description"
-
-        return processed_element_list
-
-    def _generate(self, template_context: dict) -> str:
-        template = jinja_env.get_template("constraints.py.jinja2")
-        constraint_class = template.render(template_context)
+    @classmethod
+    def _generate(cls, template_file: str, template_context: list[dict]) -> str:
+        template = jinja_env.get_template(template_file)
+        constraint_class = template.render({"constraints": template_context})
         return constraint_class
 
 
 class AllowedValueConstraintsGenerator:
     def __init__(self, constraints: list[dict]) -> None:
-        self.constraint_classes: list[dict] = []
+        allowed_values_list = []
+        self.constraint_classes: str
 
         for constraint in constraints:
             target = constraint.get("@target", ".")
             allow_other = constraint.get("@allow-other", "no")
             level = constraint.get("@level", "ERROR")
             extensible = constraint.get("@extensible", "model")
-            constraint_enums = []
-            for enum in constraint.get("enum", []):
+
+            try:
+                constraint_enums = constraint["enum"]
+            except KeyError as e:
+                raise CodeGenException(
+                    "Allowed-value constraint has not enumerated values"
+                )
+
+            processed_enums = []
+            for enum in constraint_enums:
                 try:
                     # value is mandatory with no default, so it's okay if we raise an exception here
                     value = enum["@value"]
@@ -592,6 +545,26 @@ class AllowedValueConstraintsGenerator:
                         f"No value in enum under constraint {target}"
                     )
                 # TODO: figure out how to handle the contents of the tag (e.g. the description)
+                # It is of type MarkupLine, so maybe we could re-use that.
+                processed_enums.append({"value": value})
+
+            # We've completed processing, add it to the list
+            allowed_values_list.append(
+                {
+                    "target": target,
+                    "allow_other": allow_other,
+                    "level": level,
+                    "extensible": extensible,
+                    "enums": processed_enums,
+                }
+            )
+
+        # We've processed the data, now we create the class code
+
+        self.constraint_classes = ConstraintsGenerator._generate(
+            template_file="allowed-values-constraints.py.jinja2",
+            template_context=allowed_values_list,
+        )
 
 
 class DatatypeModuleGenerator:
