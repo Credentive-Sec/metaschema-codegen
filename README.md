@@ -57,29 +57,19 @@ Next, install all of the required submodules with the `git submodule update --in
 $ git submodule update --init
 Submodule 'OSCAL' (https://github.com/usnistgov/OSCAL.git) registered for path 'OSCAL'
 Submodule 'metaschema' (https://github.com/usnistgov/metaschema.git) registered for path 'metaschema'
-Submodule 'metaschema-python/elementpath' (https://github.com/sissaschool/elementpath.git) registered for path 'metaschema-python/metaschema_python/elementpath'
 Submodule 'oscal-content' (https://github.com/usnistgov/oscal-content.git) registered for path 'oscal-content'
-Cloning into '/workspaces/metaschema-python/OSCAL'...
-Cloning into '/workspaces/metaschema-python/metaschema'...
-Cloning into '/workspaces/metaschema-python/metaschema-python/metaschema_python/elementpath'...
-Cloning into '/workspaces/metaschema-python/oscal-content'...
-remote: Enumerating objects: 17, done.
-remote: Counting objects: 100% (17/17), done.
-remote: Compressing objects: 100% (3/3), done.
-remote: Total 17 (delta 14), reused 17 (delta 14), pack-reused 0 (from 0)
-Unpacking objects: 100% (17/17), 49.52 KiB | 4.95 MiB/s, done.
+Cloning into '/workspaces/metaschema-codegen/OSCAL'...
+Cloning into '/workspaces/metaschema-codegen/metaschema'...
+Cloning into '/workspaces/metaschema-codegen/oscal-content'...
+remote: Enumerating objects: 28, done.
+remote: Counting objects: 100% (28/28), done.
+remote: Compressing objects: 100% (7/7), done.
+remote: Total 28 (delta 22), reused 27 (delta 21), pack-reused 0 (from 0)
+Unpacking objects: 100% (28/28), 50.69 KiB | 5.07 MiB/s, done.
 From https://github.com/usnistgov/OSCAL
- * branch                737ce66a738ca6f2d1808ab00e04c0e4bcd70d7b -> FETCH_HEAD
-Submodule path 'OSCAL': checked out '737ce66a738ca6f2d1808ab00e04c0e4bcd70d7b'
+ * branch                e139397dab7773f7620d65571a04f178d951fc1d -> FETCH_HEAD
+Submodule path 'OSCAL': checked out 'e139397dab7773f7620d65571a04f178d951fc1d'
 Submodule path 'metaschema': checked out 'cf5966076cce4756081a05db46a784f5fb25af27'
-remote: Enumerating objects: 3, done.
-remote: Counting objects: 100% (3/3), done.
-remote: Compressing objects: 100% (2/2), done.
-remote: Total 3 (delta 1), reused 3 (delta 1), pack-reused 0 (from 0)
-Unpacking objects: 100% (3/3), 439 bytes | 439.00 KiB/s, done.
-From https://github.com/sissaschool/elementpath
- * branch              e0edb2998c866aecfd106d4ce125f9ca371925b4 -> FETCH_HEAD
-Submodule path 'metaschema-python/metaschema_python/elementpath': checked out 'e0edb2998c866aecfd106d4ce125f9ca371925b4'
 Submodule path 'oscal-content': checked out '941c978d14c57379fbf6f7fb388f675067d5bff7'
 ```
 
