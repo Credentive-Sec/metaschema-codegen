@@ -104,13 +104,13 @@ class MetaschemaABC(metaclass=ABCMeta):
 
 class Flag(MetaschemaABC):
     """
-    A class representing a generic Flag. This is primarily used by the metaschema_python code generator and should not generally be used outside the library.
+    A class representing a generic Flag. This is primarily used by the metaschema_codegen code generator and should not generally be used outside the library.
     """
 
 
 class Field(MetaschemaABC):
     """
-    A class representing a generic Field. This is primarily used by the metaschema_python code generator and should not generally be used outside the library.
+    A class representing a generic Field. This is primarily used by the metaschema_codegen code generator and should not generally be used outside the library.
     """
 
     constraints: list[Constraint] = []
@@ -118,7 +118,7 @@ class Field(MetaschemaABC):
 
 class Assembly(MetaschemaABC):
     """
-    A class representing a generic Assembly. This is primarily used by the metaschema_python code generator and should not generally be used outside the library.
+    A class representing a generic Assembly. This is primarily used by the metaschema_codegen code generator and should not generally be used outside the library.
     """
 
     constraints: list[AssemblyConstraint] = []

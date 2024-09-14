@@ -14,13 +14,13 @@
             "name": "No Arguments",
             "type": "debugpy",
             "request": "launch",
-            "module": "metaschema_python"
+            "module": "metaschema_codegen"
         },
         {
             "name": "Help message",
             "type": "debugpy",
             "request": "launch",
-            "module": "metaschema_python",
+            "module": "metaschema_codegen",
             "args": [
                 "--help"
             ]
@@ -29,18 +29,18 @@
             "name": "Local File",
             "type": "debugpy",
             "request": "launch",
-            "module": "metaschema_python",
+            "module": "metaschema_codegen",
             "args": [
                 "OSCAL/src/metaschema/oscal_complete_metaschema.xml",
                 "-S",
-                "/workspaces/metaschema-python/metaschema/schema/xml/metaschema.xsd"
+                "/workspaces/metaschema-codegen/metaschema/schema/xml/metaschema.xsd"
             ]
         },
         {
             "name": "Remote URL (OSCAL)",
             "type": "debugpy",
             "request": "launch",
-            "module": "metaschema_python",
+            "module": "metaschema_codegen",
             "args": [
                 "https://raw.githubusercontent.com/usnistgov/OSCAL/main/src/metaschema/oscal_complete_metaschema.xml",
             ]

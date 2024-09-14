@@ -39,7 +39,7 @@ def _pythonize_name(name: str) -> str:
 
 # Intialize the jinja environment
 jinja_env = jinja2.Environment(
-    loader=jinja2.PackageLoader(package_name="metaschema_python.codegen.python")
+    loader=jinja2.PackageLoader(package_name="metaschema_codegen.codegen.python")
 )
 
 #

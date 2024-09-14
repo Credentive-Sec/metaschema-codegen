@@ -1,7 +1,7 @@
 import pytest
 
-from metaschema_python.core.schemaparse import MetaschemaSetParser
-from metaschema_python.codegen.python.codegen import PackageGenerator
+from metaschema_codegen.core.schemaparse import MetaschemaSetParser
+from metaschema_codegen.codegen.python.codegen import PackageGenerator
 from pathlib import Path
 
 

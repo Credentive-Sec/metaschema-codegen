@@ -2,7 +2,7 @@
 
 ## IMPORTANT NOTES 
 
-**IMPORTANT** Please note that the directory "metaschema-python/metaschema_python/elementpath" contains a patched version of a github repo. The PR for the patch has been accepted, but the patched version has not been published to PyPi yet, so we are maintaining the link. This will change when the a new version of the [elementpath library](https://pypi.org/project/elementpath/) is published, so don't rely on the directory being there.
+**IMPORTANT** Please note that the directory "metaschema-codegen/metaschema_codegen/elementpath" contains a patched version of a github repo. The PR for the patch has been accepted, but the patched version has not been published to PyPi yet, so we are maintaining the link. This will change when the a new version of the [elementpath library](https://pypi.org/project/elementpath/) is published, so don't rely on the directory being there.
 
 ## Purpose
 
@@ -80,7 +80,7 @@ Poetry has been configured to install a virtual env inside the project directory
 Change to the directory containing the pyproject.toml
 
 ```sh
-cd metaschema-python
+cd metaschema-codegen
 ```
 
 #### Generate the virtual environment. 
@@ -110,9 +110,9 @@ To generate the python package source code, run the "test_package_generator" tes
  
 Breakpoints can be added added at various points to inspect the data structures used for code generation:
 
-- metaschema-python/metaschema_python/core/schemaparse.py line 134: the "metaschema_schema" variable shows the contents of the internal representation of the metaschema xsd. See "metaschema_schema.complex_types" and "metaschema_schema.simple_types" for the items we use most.
-- metaschema-python/tests/test_codegen.py line 13: the "ms" variable has a complete MetaschemaSet object
-- metaschema-python/tests/conftest.py line 26: The "pg" variable contains a complete generated package.
+- metaschema-codegen/metaschema_codegen/core/schemaparse.py line 134: the "metaschema_schema" variable shows the contents of the internal representation of the metaschema xsd. See "metaschema_schema.complex_types" and "metaschema_schema.simple_types" for the items we use most.
+- metaschema-codegen/tests/test_codegen.py line 13: the "ms" variable has a complete MetaschemaSet object
+- metaschema-codegen/tests/conftest.py line 26: The "pg" variable contains a complete generated package.
 
 ## Other documentation
 

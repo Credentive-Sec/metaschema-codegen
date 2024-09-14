@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "metaschema-python"
+name = "metaschema-codegen"
 version = "0.1.0"
 description = "A Python Library for parsing metaschema definitions and creating corresponding python classes"
 authors = ["Robert Sherwood <robert.sherwood@credentive.com>"]
