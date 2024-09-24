@@ -1,12 +1,12 @@
 {# These will be added to the CONSTRAINTS class list #}
         {% for constraint in constraints -%}
-        AllowedValuesConstraint(
-            target = "{{ constraint.target }}",
+        base_classes.AllowedValuesConstraint(
+            target = base_classes.Metapath(expr="{{ constraint.target }}"),
             level = "{{ constraint.level }}",
             extensible = "{{ constraint.extensible }}",
-            enums = [
+            enum = [
                 {% for enum in constraint.enums -%}
-                AllowedValuesConstraint.AllowedValueEnum(value = "{{ enum.value }}"),
+                base_classes.AllowedValuesConstraint.AllowedValue(value = "{{ enum.value }}"),
                 {% endfor -%}
             ]
         )
