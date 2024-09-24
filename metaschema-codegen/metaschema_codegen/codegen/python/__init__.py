@@ -4,19 +4,16 @@ import typing
 # Module functions and variables
 
 
-def _pythonize_name(name: str | None) -> str | None:
+def _pythonize_name(name: str) -> str:
     """
     Returns the name of the class or variable for a defined assembly, field or flag in a module.
     Makes the name python safe by stripping spaces and converts dashes to underscores.
     This is provided to ensure consistent names when translating from fields to anything else.
     """
-    if name is None:
-        return None
-    else:
-        # Some variables have a leading "@" which we don't want
-        name = name.removeprefix("@")
-        # Strip spaces, convert dashes to underscores
-        return f'{name.replace(" ", "").replace("-","_")}'
+    # Some variables have a leading "@" which we don't want
+    name = name.removeprefix("@")
+    # Strip spaces, convert dashes to underscores
+    return f'{name.replace(" ", "").replace("-","_")}'
 
 
 # Intialize the jinja environment
@@ -95,41 +92,101 @@ class Property:
 
 class CommonTopLevelDefinition:
     """
-    A Generator Class to handle Common Instance Data
+    A Generator Class to handle Common top-level Instance Data
     """
 
-    def __init__(self, class_dict: dict):
+    def __init__(self, class_dict: dict[str, str | dict[str, str]]):
         # Mandatory values for all instances
-        self.common = {}
+        self.common_properties = {}
+
+        keys = class_dict.keys()
 
         # Name is mandatory so we reference the key directly - it should throw a key error
         # if the key is missing
-        self.common["name"] = _pythonize_name(class_dict["@name"])
+        self.common_properties["name"] = _pythonize_name(
+            typing.cast(str, class_dict["@name"])
+        )
 
         # The following attributes are optional, so we use get which will return None or
         # another default value if we need something else (e.g. empty list)
-        self.common["deprecated"] = _pythonize_name(class_dict.get("@deprecated"))
-        self.common["scope"] = _pythonize_name(class_dict.get("@scope"))
+        if "@deprecated" in keys:
+            self.common_properties["deprecated"] = _pythonize_name(
+                typing.cast(str, class_dict["@deprecated"])
+            )
 
-        self.common["formal_name"] = _pythonize_name(class_dict.get("formal-name"))
+        if "@scope" in keys:
+            self.common_properties["scope"] = _pythonize_name(
+                typing.cast(str, class_dict["@scope"])
+            )
+
+        if "formal-name" in keys:
+            self.common_properties["formal_name"] = _pythonize_name(
+                typing.cast(str, class_dict["formal-name"])
+            )
 
         # Don't pythonize description - it's a weird markup field
-        self.common["description"] = class_dict.get("description")
+        self.common_properties["description"] = class_dict.get("description")
 
-        self.common["props"] = [
-            Property(prop_dict=prop_dict)
+        self.common_properties["props"] = [
+            Property(prop_dict=typing.cast(dict, prop_dict))
             for prop_dict in class_dict.get("prop", list())
         ]
 
-        self.common["use_name"] = _pythonize_name(class_dict.get("use-name"))
-        self.common["remarks"] = class_dict.get("remarks", dict())
+        self.common_properties["use_name"] = _pythonize_name(
+            typing.cast(str, class_dict.get("use-name"))
+        )
+        self.common_properties["remarks"] = class_dict.get("remarks", dict())
 
         # Since the "effective name" can either be the "name" or the "use-name"
         # We calculate it here so it can be used elsewhere
-        if self.common["use_name"] is not None:
-            self.common["effective_name"] = self.common["use_name"]
+        if self.common_properties["use_name"] is not None:
+            self.common_properties["effective_name"] = self.common_properties[
+                "use_name"
+            ]
         else:
-            self.common["effective_name"] = self.common["name"]
+            self.common_properties["effective_name"] = self.common_properties["name"]
+
+
+class CommonInlineDefinition:
+    """
+    A Generator Class to handle Common inline Instance Data
+    """
+
+    def __init__(self, class_dict: dict[str, str | dict[str, str]]):
+        self.common_properties = {}
+
+        keys = class_dict.keys()
+
+        # Name is mandatory so we reference the key directly - it should throw a key error
+        # if the key is missing
+        self.common_properties["name"] = _pythonize_name(
+            typing.cast(str, class_dict["@name"])
+        )
+
+        # The following attributes are optional, so we use get which will return None or
+        # another default value if we need something else (e.g. empty list)
+        if "@deprecated" in keys:
+            self.common_properties["deprecated"] = _pythonize_name(
+                typing.cast(str, class_dict["@deprecated"])
+            )
+
+        if "formal-name" in keys:
+            self.common_properties["formal_name"] = _pythonize_name(
+                typing.cast(str, class_dict["formal-name"])
+            )
+
+        # Don't pythonize description - it's a weird markup field
+        self.common_properties["description"] = class_dict.get("description")
+
+        self.common_properties["props"] = [
+            Property(prop_dict=typing.cast(dict, prop_dict))
+            for prop_dict in class_dict.get("prop", list())
+        ]
+
+        self.common_properties["use_name"] = _pythonize_name(
+            typing.cast(str, class_dict.get("use-name"))
+        )
+        self.common_properties["remarks"] = class_dict.get("remarks", dict())
 
 
 class GroupAsParser:
