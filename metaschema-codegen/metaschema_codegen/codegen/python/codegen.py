@@ -27,14 +27,19 @@ from ...core.schemaparse import (
 # Module functions and variables
 
 
-def _pythonize_name(name: str) -> str:
+def _pythonize_name(name: str | None) -> str | None:
     """
     Returns the name of the class or variable for a defined assembly, field or flag in a module.
     Makes the name python safe by stripping spaces and converts dashes to underscores.
     This is provided to ensure consistent names when translating from fields to anything else.
     """
-    # Strip spaces, convert dashes to underscores
-    return f'{name.replace(" ", "").replace("-","_")}'
+    if name is None:
+        return None
+    else:
+        # Some variables have a leading "@" which we don't want
+        name = name.removeprefix("@")
+        # Strip spaces, convert dashes to underscores
+        return f'{name.replace(" ", "").replace("-","_")}'
 
 
 # Intialize the jinja environment
@@ -65,6 +70,11 @@ class GlobalReference(typing.NamedTuple):
     class_name: str  # The class name of the element in the module
 
 
+class ImportItem(typing.NamedTuple):
+    module: str
+    classes: set[str]
+
+
 class GeneratedClass(typing.NamedTuple):
     """
     A NamedTuple representing the result of processing a metaschema element
@@ -75,7 +85,7 @@ class GeneratedClass(typing.NamedTuple):
     """
 
     code: str
-    refs: list[str]
+    refs: list[ImportItem]
 
 
 class GeneratedConstraint(typing.NamedTuple):
@@ -94,11 +104,6 @@ class Root(typing.NamedTuple):
     """
 
     root_elements: list[str]
-
-
-class ImportItem(typing.NamedTuple):
-    module: str
-    classes: set[str]
 
 
 #
@@ -304,7 +309,7 @@ class MetaschemaModuleGenerator:
         imported_modules.append("datatypes")
         module_refs.update(
             {
-                global_ref.ref_name: f"{global_ref.module_name}.{global_ref.class_name}"
+                global_ref.ref_name: f"{global_ref.class_name}"
                 for global_ref in global_refs
                 if global_ref.schema_source == "datatype"
             }
@@ -321,7 +326,7 @@ class MetaschemaModuleGenerator:
             )
             module_refs.update(
                 {
-                    global_ref.ref_name: f"{global_ref.module_name}.{global_ref.class_name}"
+                    global_ref.ref_name: f"{global_ref.class_name}"
                     for global_ref in global_refs
                     if global_ref.schema_source == schema
                 }
@@ -346,13 +351,13 @@ class MetaschemaModuleGenerator:
             )
 
         #
-        # Second Pass: With our ref dictionary in place, we perform a deeper pars to actually generate the classes.
+        # Second Pass: With our ref dictionary in place, we perform a deeper parse to actually generate the classes.
         #
 
         for flag in self.metaschema.schema_dict.get("define-flag", []):
             self.generated_classes.append(
-                FlagClassGenerator(
-                    class_dict=flag, modules=imported_modules, refs=module_refs
+                TopLevelFlagClassGenerator(
+                    class_dict=flag, refs=module_refs
                 ).generated_class
             )
 
@@ -361,13 +366,10 @@ class MetaschemaModuleGenerator:
         #         FieldClassGenerator(class_dict=field, refs=module_refs).generated_class
         #     )
 
-        # With the classes generated, we create a Set to contain import strings for the imports that are actually used by
-        # the classes in the module, it's a set since we only need to import once.
-
-        imports = set()
-
-        for generated_class in self.generated_classes:
-            imports.update(generated_class.refs)
+        # With the classes generated, we create a dict to represent all of the actually used modules and classes
+        imports = self._merge_imports(
+            [g_class.refs for g_class in self.generated_classes]
+        )
 
         # Finally, we are ready to generate the module source
         template_context = {}
@@ -380,26 +382,104 @@ class MetaschemaModuleGenerator:
 
         self.generated_module = template.render(template_context)
 
+    def _merge_imports(
+        self, import_item_lists: list[list[ImportItem]]
+    ) -> list[ImportItem]:
+        # Take a list of ImportItems with redundant module/class parings
+        # and produce a list of rationalized importItems
+        merged_import_items = []
 
-class FlagClassGenerator:
+        import_dict: dict[str, list[str]] = {}  # create a dict for temp storage
+        for import_item_list in import_item_lists:
+            import_modules = [import_item.module for import_item in import_item_list]
+
+            for module in import_modules:
+                # Create import_dict entry if it doesn't exist
+                if module not in import_dict.keys():
+                    import_dict[module] = []
+
+                import_dict[module].extend(
+                    *[
+                        import_item.classes
+                        for import_item in import_item_list
+                        if import_item.module == module
+                    ]
+                )
+
+        # Convert import dict into list of ImportItems
+        for module in import_dict.keys():
+            merged_import_items.append(
+                ImportItem(
+                    module=module,
+                    classes=set(
+                        import_dict[module],
+                    ),
+                )
+            )
+
+        return merged_import_items
+
+
+class Property:
+    def __init__(self, prop_dict: dict[str, str]):
+        self.name = _pythonize_name(prop_dict["@name"])
+        self.namespace = _pythonize_name(prop_dict["@namespace"])
+        self.value = _pythonize_name(prop_dict["@value"])
+
+
+class CommonTopLevelDefinition:
+    """
+    A Generator Class to handle Common Instance Data
+    """
+
+    def __init__(self, class_dict: dict):
+        # Mandatory values for all instances
+        self.common = {}
+
+        # Name is mandatory so we reference the key directly - it should throw a key error
+        # if the key is missing
+        self.common["name"] = _pythonize_name(class_dict["@name"])
+
+        # The following attributes are optional, so we use get which will return None or
+        # another default value if we need something else (e.g. empty list)
+        self.common["deprecated"] = _pythonize_name(class_dict.get("@deprecated"))
+        self.common["scope"] = _pythonize_name(class_dict.get("@scope"))
+
+        self.common["formal_name"] = _pythonize_name(class_dict.get("formal-name"))
+
+        # Don't pythonize description - it's a weird markup field
+        self.common["description"] = class_dict.get("description")
+
+        self.common["props"] = [
+            Property(prop_dict=prop_dict)
+            for prop_dict in class_dict.get("prop", list())
+        ]
+
+        self.common["use_name"] = _pythonize_name(class_dict.get("use-name"))
+        self.common["remarks"] = class_dict.get("remarks", dict())
+
+        # Since the "effective name" can either be the "name" or the "use-name"
+        # We calculate it here so it can be used elsewhere
+        if self.common["use_name"] is not None:
+            self.common["effective_name"] = self.common["use_name"]
+        else:
+            self.common["effective_name"] = self.common["name"]
+
+
+class TopLevelFlagClassGenerator:
     """
     A class to generate a flag object from parsed metaschema flag data
     """
 
-    def __init__(
-        self, class_dict: dict, modules: list[str], refs: dict[str, str]
-    ) -> None:
+    def __init__(self, class_dict: dict, refs: dict[str, str]) -> None:
         # Parse flag data, and produce a GeneratedClass object
+        template_context = CommonTopLevelDefinition(class_dict=class_dict).common
 
         # look up the datatype class in the class_dict
         datatype = class_dict["@as-type"]
         datatype_class = refs[datatype]
 
-        template_context: dict[str, str | list[str]] = {}
-        template_context["flag_name"] = _pythonize_name(class_dict["@name"])
-        template_context["class_name"] = _pythonize_name(class_dict["formal-name"])
         template_context["datatype"] = datatype_class
-        template_context["description"] = class_dict.get("description", None)
 
         # Build constraints
         template_context["constraints"] = ConstraintsGenerator(
@@ -412,51 +492,88 @@ class FlagClassGenerator:
 
         self.generated_class = GeneratedClass(
             code=class_code,
-            refs=[datatype_class],
+            refs=[
+                ImportItem(
+                    module="datatypes",
+                    classes=set([datatype_class]),
+                )
+            ],
         )
 
 
-# class FieldClassGenerator:
-#     """
-#     A class to generate a field object from parsed metaschema flag data
-#     """
+class TopLevelFieldClassGenerator:
+    """
+    A class to generate a top-level field object from parsed metaschema field data
+    """
 
-#     def __init__(self, class_dict: dict, refs: dict[str, str]) -> None:
-#         data_type = class_dict["@as-type"]
-#         datatype_ref = refs[data_type]
+    def __init__(self, class_dict: dict, refs: dict[str, str]) -> None:
+        template_context = CommonTopLevelDefinition(class_dict=class_dict).common
 
-#         template_context = {}
-#         template_context["field_name"] = class_dict["@name"]
-#         template_context["data_type"] = data_type
-#         template_context["class_name"] = class_dict["formal-name"]
-#         template_context["description"] = class_dict.get("description")
-#         props = []
-#         for prop in class_dict.get("prop", []):
-#             props.append(
-#                 {
-#                     "name": prop["@name"],
-#                     "value": prop["@value"],
-#                     "namespace": prop.get(
-#                         "@namespace", "http://csrc.nist.gov/ns/oscal/metaschema/1.0"
-#                     ),
-#                 }
-#             )
-#         template_context["properties"] = props
+        datatype = class_dict["@as-type"]
+        datatype_ref = refs[datatype]
+        template_context["data_type"] = datatype_ref
 
-#         inline_flags = []
-#         if "define-flag" in class_dict.keys():
-#             for flag in class_dict["define-flag"]:
-#                 inline_flags.append(
-#                     FlagClassGenerator(class_dict=flag, refs=refs).generated_class
-#                 )
+        # collapsible is optional, with a default value of "no"
+        template_context["collapsible"] = class_dict.get("@collapsible", "no")
 
-#         template_context["inline-flags"] = inline_flags
+        template_context["default"] = class_dict.get("@default")
 
-#         template = jinja_env.get_template("class_field.py.jinja2")
-#         self.generated_class = GeneratedClass(
-#             code=template.render(template_context),
-#             refs=[datatype_ref],
-#         )
+        template_context["description"] = class_dict.get("description")
+
+        template_context["json_key"] = class_dict.get("json-key")
+        template_context["json_value_key"] = class_dict.get("json-value-key")
+        template_context["json_value_key_flag"] = class_dict.get("json-value-key-flag")
+
+        if class_dict.get("@min-occurs", 0) > 0:
+            template_context["mandatory"] = True
+
+        if class_dict.get("@max-occurs") is not None:
+            if class_dict["@max-occurs"] == "unbounded":
+                template_context["bounded"] = 0
+            else:
+                template_context["bounded"] = class_dict.get("@max-occurs")
+
+        template_context["json_value_key"] = class_dict.get("json-value-key")
+
+        if "group-as" in class_dict.keys():
+            template_context["group_as"] = GroupAsParser.parse(class_dict["group-as"])
+
+        # Build constraints
+        template_context["constraints"] = ConstraintsGenerator(
+            constraint_dict=class_dict.get("constraint", {})
+        ).constraints_classes
+
+        inline_flags = []
+        if "define-flag" in class_dict.keys():
+            for flag in class_dict["define-flag"]:
+                inline_flags.append(
+                    InlineFlagClassGenerator(class_dict=flag, refs=refs).generated_class
+                )
+
+        template_context["inline-flags"] = inline_flags
+
+        template = jinja_env.get_template("class_field.py.jinja2")
+        self.generated_class = GeneratedClass(
+            code=template.render(template_context),
+            refs=[datatype_ref],
+        )
+
+
+class InlineFlagClassGenerator:
+    def __init__(self, class_dict: dict, refs: dict[str, str]):
+        pass
+
+
+class GroupAsParser:
+    @staticmethod
+    def parse(group_info: dict[str, str]) -> dict[str, str]:
+        parsed_dict = {}
+        for key, value in group_info.items():
+            # Remove leading "@" if it exists
+            key = _pythonize_name(key)
+            parsed_dict[key] = value
+
+        return parsed_dict
 
 
 class ConstraintsGenerator:
