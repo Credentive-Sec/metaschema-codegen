@@ -1,4 +1,10 @@
-from . import CommonTopLevelDefinition, GroupAsParser, GeneratedClass, _initialize_jinja
+from . import (
+    CommonTopLevelDefinition,
+    GroupAsParser,
+    GeneratedClass,
+    ImportItem,
+    _initialize_jinja,
+)
 
 from .constraint_generator import ConstraintsGenerator
 
@@ -13,7 +19,9 @@ class TopLevelFieldClassGenerator:
     """
 
     def __init__(self, class_dict: dict, refs: dict[str, str]) -> None:
-        template_context = CommonTopLevelDefinition(class_dict=class_dict).common
+        template_context = CommonTopLevelDefinition(
+            class_dict=class_dict
+        ).common_properties
 
         datatype = class_dict["@as-type"]
         datatype_ref = refs[datatype]
@@ -61,5 +69,10 @@ class TopLevelFieldClassGenerator:
         template = jinja_env.get_template("class_field.py.jinja2")
         self.generated_class = GeneratedClass(
             code=template.render(template_context),
-            refs=[datatype_ref],
+            refs=[
+                ImportItem(
+                    module="datatypes",
+                    classes=set([datatype_ref]),
+                )
+            ],
         )
