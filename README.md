@@ -2,7 +2,7 @@
 
 ## IMPORTANT NOTES 
 
-**IMPORTANT** Please note that the directory "metaschema-codegen/metaschema_codegen/elementpath" contains a patched version of a github repo. The PR for the patch has been accepted, but the patched version has not been published to PyPi yet, so we are maintaining the link. This will change when the a new version of the [elementpath library](https://pypi.org/project/elementpath/) is published, so don't rely on the directory being there.
+**IMPORTANT** This is a work in progress!
 
 ## Purpose
 
@@ -102,7 +102,7 @@ poetry install
 
 ## Tests
 
- Tests should automatically be discovered, however the tests that are included in the imported "elementpath" module are not complete. A "pytest Discovery Error" will appear, but can be ignored. 
+ Tests should automatically be discovered.
 
 ### Useful Tests
 

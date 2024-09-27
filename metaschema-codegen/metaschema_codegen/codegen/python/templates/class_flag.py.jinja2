@@ -1,14 +1,14 @@
 
 
-class {{ class_name }}(Flag):
+class {{ formal_name }}(base_classes.Flag):
     """
-    {{ class_name }} is a flag of type {{ datatype }}.
+    {{ formal_name }} is a flag of type {{ datatype }}.
 
     {% if description -%}
     {{ description }}
     {%- endif %}
     """
-    name: str = "{{ flag_name }}"
+    name: str = "{{ effective_name }}"
     type = {{ datatype }}
 
     {%- if constraints %}

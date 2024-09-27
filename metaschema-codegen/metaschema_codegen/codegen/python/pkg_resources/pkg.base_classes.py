@@ -3,7 +3,7 @@ from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass, field
 from typing_extensions import Self, Literal, TypeAlias, Union
 import regex
-from .metapath import metapath # type: ignore
+from .metapath import metapath  # type: ignore
 
 
 class MetaschemaException(Exception):
@@ -172,6 +172,7 @@ class SimpleDatatype:
     ------------------
     value: The value of the variable
     """
+
     # The pattern associated with the datatype - will be overridden in subclasses
     PATTERN: str = "*"
 
@@ -186,13 +187,13 @@ class SimpleDatatype:
         if type(self).validate(raw_value):
             # if so, try to convert the string value to the underlying type
             try:
-                if type(self) == bool:
+                if type(self) is bool:
                     SimpleDatatype.fix_bool(input=raw_value)
                 else:
                     self.value = type(self).BASE_TYPE(raw_value)
             except Exception as e:
                 raise MetaschemaException(
-                    f"{self.value} cannot be instantiated as {type(self).__name__}"
+                    f"{self.value} cannot be instantiated as {type(self).__name__} : {e}"
                 )
 
     @staticmethod
@@ -278,6 +279,7 @@ class Constraint:
 
     # type: str  # NOTE this may not be necessary if we use subclasses
     target: Metapath
+    level: Literal["DEBUG", "INFORMATIONAL", "WARNING", "ERROR", "CRITICAL"]
     # Other values can go here.
 
     def validate(self, input: MetaschemaABC):
@@ -295,7 +297,7 @@ class AllowedValuesConstraint(Constraint):
     @dataclass
     class AllowedValue:
         value: str
-        description: str
+        description: str | None = None
 
     allow_other: Literal["yes", "no"] = "no"
     extensible: Literal["none", "model", "external"] = "model"
@@ -311,7 +313,7 @@ class ExpectConstraint(Constraint):
 class HasCardinalityConstraint(Constraint):
     target: Metapath
     min_occurs: int = 0
-    max_occurs: int = -1 #special case value for unbounded. math.inf is a float and requires an additional import
+    max_occurs: int = -1  # special case value for unbounded. math.inf is a float and requires an additional import
 
     def __init__(self, location, tgtstr: str, mno=0, mxo=-1):
         self.target = Metapath(tgtstr)
@@ -403,152 +405,172 @@ class Metapath:
         pass
 
     def eval(self, location):
-        #if not isinstance(location, list):
+        # if not isinstance(location, list):
         #    location = [location]
-        match(self.type+str(len(self.children))):
-            case("S1"):
-                #return self.children[0].eval(location).pop()
+        match self.type + str(len(self.children)):
+            case "S1":
+                # return self.children[0].eval(location).pop()
                 return self.children[0].eval(location)
-            case("metapath1"):
+            case "metapath1":
                 return self.children[0].eval(location)
-            case("expr1"):
-                #return [self.children[0].eval(location)]
+            case "expr1":
+                # return [self.children[0].eval(location)]
                 return self.children[0].eval(location)
-            case("expr3"):
-                #return self.children[0].eval(location).extend(self.children[2].eval(location))
+            case "expr3":
+                # return self.children[0].eval(location).extend(self.children[2].eval(location))
                 self.children[0].eval(location)
                 return self.children[2].eval(location)
-            case("exprsingle1"):
+            case "exprsingle1":
                 return self.children[0].eval(location)
-            case("orexpr1"):
+            case "orexpr1":
                 return self.children[0].eval(location)
-            case("orexpr3"):
-                return self.children[0].eval(location) or self.children[2].eval(location)
-            case("andexpr1"):
+            case "orexpr3":
+                return self.children[0].eval(location) or self.children[2].eval(
+                    location
+                )
+            case "andexpr1":
                 return self.children[0].eval(location)
-            case("andexpr3"):
-                return self.children[0].eval(location) and self.children[2].eval(location)
-            case("comparisonexpr1"):
+            case "andexpr3":
+                return self.children[0].eval(location) and self.children[2].eval(
+                    location
+                )
+            case "comparisonexpr1":
                 return self.children[0].eval(location)
-            case("comparisonexpr3"):
+            case "comparisonexpr3":
                 lhs = self.children[0].eval(location)
                 rhs = self.children[2].eval(location)
-                match(self.children[1].eval(location)):
-                    case("eq" | "="):
+                match self.children[1].eval(location):
+                    case "eq" | "=":
                         return lhs == rhs
-                    case("ne" | "!="):
+                    case "ne" | "!=":
                         return lhs != rhs
-                    case("lt" | "<"):
+                    case "lt" | "<":
                         return lhs < rhs
-                    case("le" | "<="):
+                    case "le" | "<=":
                         return lhs <= rhs
-                    case("gt" | ">"):
+                    case "gt" | ">":
                         return lhs > rhs
-                    case("ge" | ">="):
+                    case "ge" | ">=":
                         return lhs >= rhs
-            case("stringconcatexpr1"):
+            case "stringconcatexpr1":
                 return self.children[0].eval(location)
-            case("stringconcatexpr3"):
-                return str(self.children[0].eval(location)) + self.children[2].eval(location)
-            case("rangeexpr1"):
+            case "stringconcatexpr3":
+                return str(self.children[0].eval(location)) + self.children[2].eval(
+                    location
+                )
+            case "rangeexpr1":
                 return self.children[0].eval(location)
-            case("additiveexpr1"):
+            case "additiveexpr1":
                 return self.children[0].eval(location)
-            case("additiveexpr3"):
+            case "additiveexpr3":
                 if self.children[1].eval(location) == "+":
-                    return self.children[0].eval(location) + self.children[2].eval(location)
+                    return self.children[0].eval(location) + self.children[2].eval(
+                        location
+                    )
                 else:
-                    return self.children[0].eval(location) - self.children[2].eval(location)
-            case("multiplicativeexpr1"):
+                    return self.children[0].eval(location) - self.children[2].eval(
+                        location
+                    )
+            case "multiplicativeexpr1":
                 return self.children[0].eval(location)
-            case("multiplicativeexpr3"):
-                match(self.children[1].eval(location)):
-                    case("*"):
-                        return self.children[0].eval(location) * self.children[2].eval(location)
-                    case("div"):
-                        return self.children[0].eval(location) / self.children[2].eval(location)
-                    case("idiv"):
-                        return self.children[0].eval(location) // self.children[2].eval(location)
-                    case("mod"):
-                        return self.children[0].eval(location) % self.children[2].eval(location)
-            case("unionexpr1"):
+            case "multiplicativeexpr3":
+                match self.children[1].eval(location):
+                    case "*":
+                        return self.children[0].eval(location) * self.children[2].eval(
+                            location
+                        )
+                    case "div":
+                        return self.children[0].eval(location) / self.children[2].eval(
+                            location
+                        )
+                    case "idiv":
+                        return self.children[0].eval(location) // self.children[2].eval(
+                            location
+                        )
+                    case "mod":
+                        return self.children[0].eval(location) % self.children[2].eval(
+                            location
+                        )
+            case "unionexpr1":
                 return self.children[0].eval(location)
-            case("intersectexceptexpr1"):
+            case "intersectexceptexpr1":
                 return self.children[0].eval(location)
-            case("arrowexpr1"):
+            case "arrowexpr1":
                 return self.children[0].eval(location)
-            case("unaryexpr1"):
+            case "unaryexpr1":
                 return self.children[0].eval(location)
-            case("valueexpr1"):
+            case "valueexpr1":
                 return self.children[0].eval(location)
-            case("simplemapexpr1"):
+            case "simplemapexpr1":
                 return self.children[0].eval(location)
-            case("pathexpr1"):
-                #either this is just / (with nothing following) or it is a relative path
-                if self.children[0].type == 'relativepathexpr':
-                    #relative path
+            case "pathexpr1":
+                # either this is just / (with nothing following) or it is a relative path
+                if self.children[0].type == "relativepathexpr":
+                    # relative path
                     return self.children[0].eval(location)
                 else:
-                    #just /
+                    # just /
                     pass
-            case("pathexpr2"):
+            case "pathexpr2":
                 pass
-            case("relativepathexpr1"):
-                #based off of the location
-                if self.children[0].children[0].type == 'axisstep':
+            case "relativepathexpr1":
+                # based off of the location
+                if self.children[0].children[0].type == "axisstep":
                     return location._resolve_target(self.children[0].eval(location))
-                else: #postfixexpr
+                else:  # postfixexpr
                     return self.children[0].eval(location)
-            case("relativepathexpr3"):
-                base = self.children[0].eval(location) #relativepathexpr: returns a list of locations
-                name = self.children[2].eval(location) #stepexpr: returns a string
+            case "relativepathexpr3":
+                base = self.children[0].eval(
+                    location
+                )  # relativepathexpr: returns a list of locations
+                name = self.children[2].eval(location)  # stepexpr: returns a string
                 toret = []
                 for item in base:
                     toret.extend(item._resolve_target(name))
                 return toret
-            case("relativepathexpr4"):
+            case "relativepathexpr4":
                 base = self.children[0].eval(location)
                 toret = []
                 for item in base:
                     if self.children[2].eval(item):
                         toret.append(item)
                 return toret
-            case("stepexpr1"):
+            case "stepexpr1":
                 return self.children[0].eval(location)
-            case("axisstep1"):
+            case "axisstep1":
                 return self.children[0].eval(location)
-            case("forwardstep1"):
+            case "forwardstep1":
                 return self.children[0].eval(location)
-            case("abbrevforwardstep1"):
+            case "abbrevforwardstep1":
                 return self.children[0].eval(location)
-            case("abbrevforwardstep2"):
-                return "@"+self.children[1].eval(location)
-            case("reversestep1"):
+            case "abbrevforwardstep2":
+                return "@" + self.children[1].eval(location)
+            case "reversestep1":
                 pass
-            case("abbrevreversestep1"):
+            case "abbrevreversestep1":
                 pass
-            case("nametest1"):
+            case "nametest1":
                 return self.children[0].eval(location)
-            case("postfixexpr1"):
+            case "postfixexpr1":
                 return self.children[0].eval(location)
-            case("primaryexpr1"):
+            case "primaryexpr1":
                 return self.children[0].eval(location)
-            case("literal1"):
+            case "literal1":
                 return self.children[0].eval(location)
-            case("numericliteral1"):
+            case "numericliteral1":
                 return self.children[0].eval(location)
             # ...
-            case("parenthesizedexpr3"):
+            case "parenthesizedexpr3":
                 return self.children[1].eval(location)
-            case("eqname1"):
-                #maybe we should pythonize the name here
+            case "eqname1":
+                # maybe we should pythonize the name here
                 return self.children[0].eval(location)
         if self.value is None:
             return self.children[0].eval(location)
         return self.value
-    
 
-#just in case, here is an example case that you can drop in and run to check on what this code is doing:
+
+# just in case, here is an example case that you can drop in and run to check on what this code is doing:
 # class ExampleDummy():
 #     children: dict
 #     def __init__(self):
