@@ -6,7 +6,6 @@ from lxml import etree
 from pathlib import Path
 from typing import cast
 import logging
-import re
 import dataclasses
 
 # relative import below because we need to fix the translator
@@ -119,11 +118,9 @@ class MetaschemaSetParser:
         metaschema_location: str | Path,
         chase_imports: bool = True,
         schema_location: str = "https://raw.githubusercontent.com/usnistgov/metaschema/main/schema/xml/metaschema.xsd",
-        schema_base_url: (
-            str | None
-        ) = "https://raw.githubusercontent.com/usnistgov/metaschema/main/schema/xml/",
-    ):
-
+        schema_base_url: (str | None) = "https://raw.githubusercontent.com/usnistgov/metaschema/main/schema/xml/",
+        ):
+        
         # Parse the XML Schema
         xsd_contents = request.urlopen(schema_location).read()
         metaschema_schema = xmlschema.XMLSchema(
