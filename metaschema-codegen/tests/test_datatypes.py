@@ -12,5 +12,5 @@ def datatypes_module():
 
 
 class TestGeneratedDatatypes:
-    def test_import(self, datatypes_module):
+    def test_import(self, datatypes_module: ModuleType):
         assert isinstance(datatypes_module, ModuleType)

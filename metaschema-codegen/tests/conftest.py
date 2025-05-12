@@ -1,19 +1,21 @@
+from pathlib import Path
+
 import pytest
 
-from metaschema_codegen.core.schemaparse import MetaschemaSetParser
-from metaschema_codegen.codegen.python.codegen import PackageGenerator
-from pathlib import Path
+from metaschema_codegen.codegen.python.package_generator import PackageGenerator
+from metaschema_codegen.core.schemaparse import MetaschemaSetParser, MetaSchemaSet
 
 
 @pytest.fixture(scope="module")
 def parsed_metaschema():
-    ms = MetaschemaSetParser(
-        metaschema_location="OSCAL/src/metaschema/oscal_complete_metaschema.xml"
-    ).metaschema_set
+    """Fixture to parse the metaschema and return a MetaSchemaSet object."""
+    metaschema_path = Path(__file__).parent.parent.parent / "OSCAL" / "src" / "metaschema" / "oscal_complete_metaschema.xml"
+    ms = MetaschemaSetParser(metaschema_location=metaschema_path).metaschema_set
     return ms
 
+
 @pytest.fixture(scope="module")
-def generated_package(parsed_metaschema):
+def generated_package(parsed_metaschema: MetaSchemaSet):
     output_path = Path("test-output")
     if not output_path.exists():
         output_path.mkdir()

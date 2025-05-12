@@ -10,6 +10,8 @@ def _pythonize_name(name: str) -> str:
     Makes the name python safe by stripping spaces and converts dashes to underscores.
     This is provided to ensure consistent names when translating from fields to anything else.
     """
+    if name is None:
+        pass
     # Some variables have a leading "@" which we don't want
     name = name.removeprefix("@")
     # Strip spaces, convert dashes to underscores
@@ -97,7 +99,7 @@ class CommonTopLevelDefinition:
 
     def __init__(self, class_dict: dict[str, str | dict[str, str]]):
         # Mandatory values for all instances
-        self.common_properties = {}
+        self.common_properties: dict[str, str] = {}
 
         keys = class_dict.keys()
 
@@ -125,16 +127,22 @@ class CommonTopLevelDefinition:
             )
 
         # Don't pythonize description - it's a weird markup field
-        self.common_properties["description"] = class_dict.get("description")
+        if "description" in keys:
+            self.common_properties["description"] = typing.cast(str, class_dict["description"])
 
         self.common_properties["props"] = [
             Property(prop_dict=typing.cast(dict, prop_dict))
             for prop_dict in class_dict.get("prop", list())
         ]
 
-        self.common_properties["use_name"] = _pythonize_name(
-            typing.cast(str, class_dict.get("use-name"))
-        )
+        use_name = class_dict.get("use-name")
+        if use_name is None:
+            pass
+        else:
+            self.common_properties["use_name"] = _pythonize_name(
+                typing.cast(str, class_dict.get("use-name"))
+            )
+
         self.common_properties["remarks"] = class_dict.get("remarks", dict())
 
         # Since the "effective name" can either be the "name" or the "use-name"
