@@ -20,7 +20,7 @@ from ...core.schemaparse import (
     MetaSchemaSet,
 )
 
-from .module_generator import MetaschemaModuleGenerator
+from .module_generator import MetaschemaModelPackageGenerator
 
 from .datatypes_generator import DatatypeModuleGenerator
 
@@ -61,7 +61,7 @@ class PackageGenerator:
         self.destination = destination_directory
         self.package_name = package_name
         self.module_generators: list[
-            MetaschemaModuleGenerator | DatatypeModuleGenerator
+            MetaschemaModelPackageGenerator | DatatypeModuleGenerator
         ] = []
 
         # generate code for all of the core datatypes
@@ -127,7 +127,7 @@ class PackageGenerator:
         """
         for metaschema in self.metaschema_set.metaschemas:
             self.module_generators.append(
-                MetaschemaModuleGenerator(
+                MetaschemaModelPackageGenerator(
                     metaschema=metaschema,
                     global_refs=self.global_refs,
                 )

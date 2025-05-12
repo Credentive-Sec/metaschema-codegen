@@ -1,6 +1,6 @@
 from metaschema_codegen.codegen.python.package_generator import (
     PackageGenerator,
-    MetaschemaModuleGenerator,
+    MetaschemaModelPackageGenerator,
     DatatypeModuleGenerator,
 )
 
@@ -24,9 +24,8 @@ class TestPackageGenerator:
 
     def test_classes(self, generated_package: PackageGenerator):
         for m_gen in generated_package.module_generators:
-            assert isinstance(m_gen, MetaschemaModuleGenerator) or isinstance(
-                m_gen, DatatypeModuleGenerator
-            )
+            assert (isinstance(m_gen, MetaschemaModelPackageGenerator) 
+                    or isinstance(m_gen, DatatypeModuleGenerator))
 
 
 class TestDatatypesGenerator:

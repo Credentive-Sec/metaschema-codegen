@@ -10,12 +10,12 @@ from . import (
     ImportItem,
 )
 
-from . import flag_generator
+from . import flag_generator, field_generator
 
 jinja_env = _initialize_jinja()
 
 
-class MetaschemaModuleGenerator:
+class MetaschemaModelPackageGenerator:
     """
     A class to generate a python source code file (module) from a parsed metaschema. It will contain a class for
     every instance in the metaschema. It converts a data object representing a generic metaschema to a python
@@ -30,7 +30,8 @@ class MetaschemaModuleGenerator:
         self.module_name = _pythonize_name(
             typing.cast(str, metaschema.schema_dict["short-name"])
         )
-        self.generated_classes: list[GeneratedClass] = []
+        self.generated_fields: list[GeneratedClass] = []
+        self.generated_flags: list[GeneratedClass] = []
 
         #
         # The first pass is to generate the list of elements imported by or defined in the metaschema so that we can
@@ -98,32 +99,54 @@ class MetaschemaModuleGenerator:
         #
 
         for flag in self.metaschema.schema_dict.get("define-flag", []):
-            self.generated_classes.append(
+            self.generated_flags.append(
                 flag_generator.TopLevelFlagClassGenerator(
                     class_dict=flag, refs=module_refs
                 ).generated_class
             )
 
-        # for field in self.metaschema.schema_dict.get("define-field", []):
-        #     self.generated_classes.append(
-        #         FieldClassGenerator(class_dict=field, refs=module_refs).generated_class
-        #     )
+        for field in self.metaschema.schema_dict.get("define-field", []):
+            self.generated_fields.append(
+                field_generator.TopLevelFieldClassGenerator(
+                    class_dict=field, refs=module_refs
+                ).generated_class
+            )
 
+        # Fields, flags and assemblies can all have the same names, so we need to separate them into separate modules
+
+        # Flags first
         # With the classes generated, we create a dict to represent all of the actually used modules and classes
         imports = self._merge_imports(
-            [g_class.refs for g_class in self.generated_classes]
+            [g_class.refs for g_class in self.generated_flags]
         )
 
         # Finally, we are ready to generate the module source
         template_context = {}
         template_context["imports"] = imports
         template_context["classes"] = [
-            generated_class.code for generated_class in self.generated_classes
+            generated_class.code for generated_class in self.generated_flags
         ]
 
         template = jinja_env.get_template("module.py.jinja2")
 
-        self.generated_module = template.render(template_context)
+        self.generated_flag_module = template.render(template_context)
+
+        # With the classes generated, we create a dict to represent all of the actually used modules and classes
+        imports = self._merge_imports(
+            [g_class.refs for g_class in self.generated_fields]
+        )
+
+        # Fields now
+        # Finally, we are ready to generate the module source
+        template_context = {}
+        template_context["imports"] = imports
+        template_context["classes"] = [
+            generated_class.code for generated_class in self.generated_fields
+        ]
+
+        template = jinja_env.get_template("module.py.jinja2")
+
+        self.generated_field_module = template.render(template_context)
 
     def _merge_imports(
         self, import_item_lists: list[list[ImportItem]]

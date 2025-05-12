@@ -1,8 +1,8 @@
 
 
-class {{ formal_name }}(Field):
+class {{ formal_name }}(base_classes.Field):
     """
-    {{ formal_name }} is a field of type {{ datatype }}.
+    {{ formal_name }} is a field of type {{ data_type }}.
 
     {% if description %} {{ description }} {% endif %}
 
@@ -11,8 +11,9 @@ class {{ formal_name }}(Field):
     {% endfor %}
     """
     name: str = {{ field_name }}
-    type = {{ datatype }}
+    type = {{ datat_type }}
+    collapsible: bool = "{{ collapsible }}"
 
     {%- for flag in inline_flags -%}
-        {{ flag }}
+        {{ flag.code }}
     {%- endfor -%}

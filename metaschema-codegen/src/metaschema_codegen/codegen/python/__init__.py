@@ -10,8 +10,6 @@ def _pythonize_name(name: str) -> str:
     Makes the name python safe by stripping spaces and converts dashes to underscores.
     This is provided to ensure consistent names when translating from fields to anything else.
     """
-    if name is None:
-        pass
     # Some variables have a leading "@" which we don't want
     name = name.removeprefix("@")
     # Strip spaces, convert dashes to underscores
@@ -191,9 +189,6 @@ class CommonInlineDefinition:
             for prop_dict in class_dict.get("prop", list())
         ]
 
-        self.common_properties["use_name"] = _pythonize_name(
-            typing.cast(str, class_dict.get("use-name"))
-        )
         self.common_properties["remarks"] = class_dict.get("remarks", dict())
 
 

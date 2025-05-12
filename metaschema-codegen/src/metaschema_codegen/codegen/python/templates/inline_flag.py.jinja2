@@ -1,0 +1,17 @@
+class {{ formal_name }}(base_classes.Flag):
+    """
+    {{ formal_name }} is a flag of type {{ datatype }}.
+
+    {% if description -%}
+    {{ description }}
+    {%- endif %}
+    """
+    name: str = "{{ effective_name }}"
+    type = {{ datatype }}
+
+    {%- if constraints %}
+    constraints = [{%- for constraint in constraints -%}
+    {{ constraint }}
+    {%- endfor -%}
+    ]
+    {%- endif %}

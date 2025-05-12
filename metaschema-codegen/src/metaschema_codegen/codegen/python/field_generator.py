@@ -4,6 +4,7 @@ from . import (
     GeneratedClass,
     ImportItem,
     _initialize_jinja,
+    _pythonize_name
 )
 
 from .constraint_generator import ConstraintsGenerator
@@ -19,36 +20,39 @@ class TopLevelFieldClassGenerator:
     """
 
     def __init__(self, class_dict: dict, refs: dict[str, str]) -> None:
+        # Grab all the properties that are common to all types
         template_context = CommonTopLevelDefinition(
             class_dict=class_dict
         ).common_properties
 
+        # Flags have an associated datatype
         datatype = class_dict["@as-type"]
-        datatype_ref = refs[datatype]
+        datatype_ref = refs[_pythonize_name(datatype)]
         template_context["data_type"] = datatype_ref
+
+        # These other values are optional
 
         # collapsible is optional, with a default value of "no"
         template_context["collapsible"] = class_dict.get("@collapsible", "no")
 
         template_context["default"] = class_dict.get("@default")
 
-        template_context["description"] = class_dict.get("description")
-
+        #  Get the keys relevant for JSON/YAML encoding
         template_context["json_key"] = class_dict.get("json-key")
         template_context["json_value_key"] = class_dict.get("json-value-key")
         template_context["json_value_key_flag"] = class_dict.get("json-value-key-flag")
 
-        if class_dict.get("@min-occurs", 0) > 0:
-            template_context["mandatory"] = True
+        template_context["min_occurs"] = class_dict.get("@min-occurs", 0)
 
-        if class_dict.get("@max-occurs") is not None:
-            if class_dict["@max-occurs"] == "unbounded":
-                template_context["bounded"] = 0
-            else:
-                template_context["bounded"] = class_dict.get("@max-occurs")
+        # template_context["json_value_key"] = class_dict.get("json-value-key")
 
-        template_context["json_value_key"] = class_dict.get("json-value-key")
+        if class_dict.get("@max-occurs") == "unbounded":
+            template_context["max_occurs"] = None
+        else:
+            # max-occurs is optional, with a default value of 1
+            template_context["max_occurs"] = class_dict.get("@max-occurs", 1)
 
+        # Name for grouping if XML
         if "group-as" in class_dict.keys():
             template_context["group_as"] = GroupAsParser.parse(class_dict["group-as"])
 
@@ -64,7 +68,7 @@ class TopLevelFieldClassGenerator:
                     InlineFlagClassGenerator(class_dict=flag, refs=refs).generated_class
                 )
 
-        template_context["inline-flags"] = inline_flags
+        template_context["inline_flags"] = inline_flags
 
         template = jinja_env.get_template("class_field.py.jinja2")
         self.generated_class = GeneratedClass(

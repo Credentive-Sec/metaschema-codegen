@@ -107,6 +107,34 @@ class Flag(MetaschemaABC):
     A class representing a generic Flag. This is primarily used by the metaschema_codegen code generator and should not generally be used outside the library.
     """
 
+    constraints: list[Constraint] = []
+
+    def to_dict(self) -> dict:
+        return {}
+
+    def to_json(self) -> str:
+        return "object={}"
+
+    @classmethod
+    def from_json(cls, json: str) -> Flag:
+        return self
+
+    def to_xml(self) -> str:
+        return "<xml/>"
+
+    @classmethod
+    def from_xml(cls, xml: str) -> Flag:
+        return self
+
+    def to_yaml(self) -> str:
+        return ""
+
+    @classmethod
+    def from_yaml(cls, yaml: str) -> Flag:
+        return self
+
+    def metaschema_spec(self) -> str:
+        return ""
 
 class Field(MetaschemaABC):
     """
@@ -156,6 +184,23 @@ class Assembly(MetaschemaABC):
         # Do some processing
 
         return target_list
+
+
+class Instance:
+    """
+    This class represents an Instance defined in a metaschema model. Metaschema allows Instances of different types (field, flag, assembly) to have the same name.
+    To address this, all elements of a metaschema object are defined as instances, and the type of the instance is determined when it is referenced in another element.
+    """
+
+    def as_flag(self):
+        return Flag()
+
+    def as_field(self):
+        pass
+
+    def as_assembly(self):
+        pass
+
 
 
 class SimpleDatatype:
@@ -313,15 +358,16 @@ class ExpectConstraint(Constraint):
 class HasCardinalityConstraint(Constraint):
     target: Metapath
     min_occurs: int = 0
-    max_occurs: int = -1  # special case value for unbounded. math.inf is a float and requires an additional import
+    max_occurs: int | None = None  # If None, then unbounded
 
-    def __init__(self, location, tgtstr: str, mno=0, mxo=-1):
+    def __init__(self, location, tgtstr: str, min_occurs=0, max_occurs=None):
         self.target = Metapath(tgtstr)
-        self.min_occurs = mno
-        if mxo == "unbounded":
-            self.max_occurs = -1
+        self.min_occurs = min_occurs
+        if max_occurs == "unbounded":
+            self.max_occurs = None
         else:
             self.max_occurs = mxo
+        self.min_occurs = min_occurs
         self.location = location
 
     def validate(self):
@@ -329,8 +375,7 @@ class HasCardinalityConstraint(Constraint):
         if self.min_occurs != 0:
             if cardinality < self.min_occurs:
                 return False
-        if self.max_occurs != -1:
-            if cardinality > self.max_occurs:
+        if self.max_occurs is not None and cardinality > self.max_occurs:
                 return False
         return True
 

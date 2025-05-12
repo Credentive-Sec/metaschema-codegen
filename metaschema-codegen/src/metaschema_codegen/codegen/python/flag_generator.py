@@ -1,8 +1,8 @@
-from . import CommonTopLevelDefinition, GeneratedClass, ImportItem, _initialize_jinja
+from . import CommonTopLevelDefinition, GeneratedClass, ImportItem, _initialize_jinja, _pythonize_name
 
 from .constraint_generator import ConstraintsGenerator
 
-jinja_env = _initialize_jinja
+jinja_env = _initialize_jinja()
 
 
 class TopLevelFlagClassGenerator:
@@ -18,7 +18,7 @@ class TopLevelFlagClassGenerator:
 
         # look up the datatype class in the class_dict
         datatype = class_dict["@as-type"]
-        datatype_class = refs[datatype]
+        datatype_class = refs[_pythonize_name(datatype)]
 
         template_context["datatype"] = datatype_class
 
@@ -50,7 +50,7 @@ class InlineFlagClassGenerator:
 
         # look up the datatype class in the class_dict
         datatype = class_dict["@as-type"]
-        datatype_class = refs[datatype]
+        datatype_class = refs[_pythonize_name(datatype)]
 
         template_context["datatype"] = datatype_class
 
@@ -59,7 +59,7 @@ class InlineFlagClassGenerator:
             constraint_dict=class_dict.get("constraint", {})
         ).constraints_classes
 
-        template = jinja_env.get_template("class_flag.py.jinja2")
+        template = jinja_env.get_template("inline_flag.py.jinja2")
 
         class_code = template.render(template_context)
 
