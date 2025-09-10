@@ -4,7 +4,7 @@ from urllib import request, parse
 import xmlschema
 from lxml import etree
 from pathlib import Path
-from typing import cast
+from typing import cast, Any
 import logging
 import dataclasses
 
@@ -89,7 +89,7 @@ class Metaschema:
     imports: list[str]
     globals: dict[str, str]
     roots: list[str]
-    schema_dict: dict
+    schema_dict: dict[str, Any]
 
 
 @dataclasses.dataclass

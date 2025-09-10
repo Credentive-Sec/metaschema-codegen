@@ -4,6 +4,24 @@ from .. import CodeGenException
 
 jinja_env = _initialize_jinja()
 
+class MetaPathParser:
+    """
+    A class to parse metaschema into a format that support processing
+    """
+    def __init__(self, target_path: str) -> None:
+        """
+        Initializes the ConstraintGenerator with the specified target path.
+        Args:
+        target_path (str): The metapath defined at the "@target" field.        
+        """
+
+        # Before processing the path, replace "has-oscal-namespace" with the XPath equivalent
+        #  target="field/@ns = 'http://csrc.nist.gov/ns/oscal'" in place of target="fieldt[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')"
+
+        if "has-oscal-namespace" in target_path:
+
+
+part/@ns=('http://csrc.nist.gov/ns/oscal') and @name=('assessment','assessment-method')/prop/@ns=('http://csrc.nist.gov/ns/oscal','http://csrc.nist.gov/ns/rmf') and @name='method'
 
 class ConstraintsGenerator:
     """

@@ -145,7 +145,7 @@ class CommonTopLevelDefinition:
 
         # Since the "effective name" can either be the "name" or the "use-name"
         # We calculate it here so it can be used elsewhere
-        if self.common_properties["use_name"] is not None:
+        if self.common_properties.get("use_name") is not None:
             self.common_properties["effective_name"] = self.common_properties[
                 "use_name"
             ]

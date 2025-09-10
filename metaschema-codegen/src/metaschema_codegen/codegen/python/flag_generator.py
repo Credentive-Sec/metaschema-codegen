@@ -12,9 +12,7 @@ class TopLevelFlagClassGenerator:
 
     def __init__(self, class_dict: dict, refs: dict[str, str]) -> None:
         # Parse flag data, and produce a GeneratedClass object
-        template_context = CommonTopLevelDefinition(
-            class_dict=class_dict
-        ).common_properties
+        template_context = CommonTopLevelDefinition(class_dict=class_dict).common_properties
 
         # look up the datatype class in the class_dict
         datatype = class_dict["@as-type"]
