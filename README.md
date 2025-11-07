@@ -35,18 +35,14 @@ The library provides information about the structure of defined metaschema, but 
 
 ## Setting up your development environment
 
-This project uses [poetry](https://python-poetry.org/) for development and packaging. This installation should be handled automatically via installation of the development container.
+This project uses [uv](https://docs.astral.sh/uv/) for development and packaging.
 
-### Development Container
+Installation instructions are here: https://docs.astral.sh/uv/getting-started/installation/
 
-The project team uses a [develoment container](https://containers.dev/) to simplify development, which works well in Visual Studio Code. If you clone the repository in VS Code, you should be prompted to reopen the project in a dev container.
-
-### Use 'dev' Branch
-
-Immediately after cloning the repository, switch to the 'dev' branch. This is where development is occuring, and it differs significantly from the main branch.
+### Clone the repository
 
 ```sh
-git switch dev
+git clone https://github.com/Credentive-Sec/metaschema-codegen.git
 ```
 
 ### Install Submodules
@@ -54,6 +50,7 @@ git switch dev
 Next, install all of the required submodules with the `git submodule update --init` command. Confirm that all four of the submodules listed below are cloned.
 
 ```sh
+$ cd metaschema-codegen
 $ git submodule update --init
 Submodule 'OSCAL' (https://github.com/usnistgov/OSCAL.git) registered for path 'OSCAL'
 Submodule 'metaschema' (https://github.com/usnistgov/metaschema.git) registered for path 'metaschema'

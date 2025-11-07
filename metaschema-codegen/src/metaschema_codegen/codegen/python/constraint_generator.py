@@ -1,8 +1,14 @@
+import re
+
 from . import _initialize_jinja
 
 from .. import CodeGenException
 
+from typing import cast
+
 jinja_env = _initialize_jinja()
+
+OSCAL_NAMESPACE_RE = re.compile(r".*?has-oscal-namespace\((?P<ns>['\w:\/\. ,\(\)]+?)\)(?P<other_conditions>.*?)\].*?")
 
 class MetaPathParser:
     """
@@ -19,9 +25,14 @@ class MetaPathParser:
         #  target="field/@ns = 'http://csrc.nist.gov/ns/oscal'" in place of target="fieldt[has-oscal-namespace('http://csrc.nist.gov/ns/oscal')"
 
         if "has-oscal-namespace" in target_path:
+            matches = re.findall(OSCAL_NAMESPACE_RE, target_path)
+            for match in matches:
+                # cast doesn't do anything, it's just for the type checker
+                # We know our regex has multiple capture groups, so will always return tuples
+                cast(tuple[str], match) 
+                
 
-
-part/@ns=('http://csrc.nist.gov/ns/oscal') and @name=('assessment','assessment-method')/prop/@ns=('http://csrc.nist.gov/ns/oscal','http://csrc.nist.gov/ns/rmf') and @name='method'
+            pass
 
 class ConstraintsGenerator:
     """
