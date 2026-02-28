@@ -110,7 +110,7 @@ class SchemaParseException(Exception):
 
 class MetaschemaSetParser:
     """
-    This class provides a parser that will return a MetaschemaSet containing datatypes and or more parsed Metaschema schemas.
+    This class will parse metaschema files and return a MetaschemaSet object containing datatypes and one or more parsed Metaschemas
     """
 
     def __init__(
