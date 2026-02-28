@@ -72,29 +72,17 @@ Submodule path 'oscal-content': checked out '941c978d14c57379fbf6f7fb388f675067d
 
 ### Setup virtual env
 
-Poetry has been configured to install a virtual env inside the project directory, since VS Code prefers that configuration.
+UV installs a virtual env inside the project directory, which works well with VS Code.
 
-Change to the directory containing the pyproject.toml
-
-```sh
-cd metaschema-codegen
-```
-
-#### Generate the virtual environment. 
-This command will read the poetry configuration, generate a virtual environment, and activate it in the current terminal.
+Run this command from inside the metaschema-codegen directory within the project. The directory should contain a pyproject.toml file.
 
 ```sh
-poetry shell
+uv sync
 ```
 
-#### Install poetry dependencies
-This command will install the appropriate vesions of all dependencies in the project.
+It may be necessary to reload the VS Code window for VS Code to pick up and activate the new virtual environment and installed dependencies ("Developer: Reload Window").
 
-```sh
-poetry install
-```
-
- It may be necessary to reload the VS Code window for VS Code to pick up and activate the new virtual environment and installed dependencies ("Developer: Reload Window").
+If you open the repository root directory in VS Code, it may not discover the .venv directory in the metaschema-subdirectory, and you may need to manually select it. 
 
 
 ## Tests

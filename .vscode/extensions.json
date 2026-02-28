@@ -1,5 +1,7 @@
 {
     "recommendations": [
-        "shyykoserhiy.git-autoconfig"
+        "shyykoserhiy.git-autoconfig",
+        "charliermarsh.ruff",
+        "astral-sh.ty"
     ]
 }
