@@ -159,9 +159,7 @@ class PackageGenerator:
                 self._copy_resource_file_to_pkg(resource_file, package_path)
 
         for module_generator in self.module_generators:
-            module_file = package_path.joinpath(
-                Path(f"{module_generator.module_name}.py")
-            )
+            module_file = package_path.joinpath(Path(f"{module_generator.module_name}.py"))
             module_file.write_text(module_generator.generated_module)
 
     def _copy_resource_file_to_pkg(

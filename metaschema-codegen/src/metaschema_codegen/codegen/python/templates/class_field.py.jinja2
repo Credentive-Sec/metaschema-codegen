@@ -11,7 +11,7 @@ class {{ formal_name }}(base_classes.Field):
     {% endfor %}
     """
     name: str = {{ field_name }}
-    type = {{ datat_type }}
+    datatype = datatypes.{{ data_type }}
     collapsible: bool = "{{ collapsible }}"
 
     {%- for flag in inline_flags -%}

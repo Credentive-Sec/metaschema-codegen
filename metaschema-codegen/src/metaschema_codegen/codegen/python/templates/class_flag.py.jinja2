@@ -9,7 +9,7 @@ class {{ formal_name }}(base_classes.Flag):
     {%- endif %}
     """
     name: str = "{{ effective_name }}"
-    type = {{ datatype }}
+    datatype = datatypes.{{ datatype }}
 
     {%- if constraints %}
     constraints = [{%- for constraint in constraints -%}

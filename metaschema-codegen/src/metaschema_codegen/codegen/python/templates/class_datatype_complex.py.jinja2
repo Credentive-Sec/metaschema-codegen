@@ -1,5 +1,5 @@
 
-class {{ datatype.name }}(ComplexDataType):
+class {{ datatype.name }}(base_classes.ComplexDataType):
     """
     This class defines the complex {{ datatype.name }} datatype from metaschema. 
     {% if datatype.pattern -%}

@@ -25,7 +25,7 @@ def _initialize_jinja() -> jinja2.Environment:
 
 
 #
-# Utility Dataclasses
+# Utility DTOs
 #
 
 
@@ -82,7 +82,6 @@ class Root(typing.NamedTuple):
 
     root_elements: list[str]
 
-
 class Property:
     def __init__(self, prop_dict: dict[str, str]):
         self.name = _pythonize_name(prop_dict["@name"])
@@ -97,7 +96,7 @@ class CommonTopLevelDefinition:
 
     def __init__(self, class_dict: dict[str, str | dict[str, str]]):
         # Mandatory values for all instances
-        self.common_properties: dict[str, str] = {}
+        self.common_properties: dict[str, str | list[Property]] = {}
 
         keys = class_dict.keys()
 
@@ -109,10 +108,8 @@ class CommonTopLevelDefinition:
 
         # The following attributes are optional, so we use get which will return None or
         # another default value if we need something else (e.g. empty list)
-        if "@deprecated" in keys:
-            self.common_properties["deprecated"] = _pythonize_name(
-                typing.cast(str, class_dict["@deprecated"])
-            )
+        if "@deprecated" in keys and isinstance(class_dict["@deprecated"], str):
+            self.common_properties["deprecated"] = _pythonize_name(class_dict["@deprecated"])
 
         if "@scope" in keys:
             self.common_properties["scope"] = _pythonize_name(

@@ -2,7 +2,7 @@
 {% if datatype.parent %}
 class {{ datatype.name }}({{ datatype.parent }}):
 {% else %}
-class {{ datatype.name }}(SimpleDatatype):
+class {{ datatype.name }}(base_classes.SimpleDatatype):
 {%- endif %}
     """
     This class defines the simple type{{ datatype.name }} from the metaschema specification.

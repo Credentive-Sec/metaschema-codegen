@@ -1,16 +1,15 @@
 import typing
 
 from ...core.schemaparse import Metaschema
-
 from . import (
-    _pythonize_name,
-    _initialize_jinja,
-    GlobalReference,
     GeneratedClass,
+    GlobalReference,
     ImportItem,
+    _initialize_jinja,
+    _pythonize_name,
+    field_generator,
+    flag_generator,
 )
-
-from . import flag_generator, field_generator
 
 jinja_env = _initialize_jinja()
 
@@ -50,7 +49,7 @@ class MetaschemaModelPackageGenerator:
         module_refs: dict[str, str] = {}
 
         # Add all the refs from datatypes, since most of these will be used. Datatypes are not explicitly imported by a metaschem spec
-        imported_modules.append("datatypes")
+        # imported_modules.append("datatypes")
         module_refs.update(
             {
                 global_ref.ref_name: f"{global_ref.class_name}"
@@ -80,18 +79,19 @@ class MetaschemaModelPackageGenerator:
         # Note that a locally defined instance's @ref will overwrite an import @ref, which I think is the correct behavior
 
         for flag in self.metaschema.schema_dict.get("define-flag", []):
-            module_refs[f'{_pythonize_name(flag["@name"])}'] = (
-                f'{_pythonize_name(flag["formal-name"])}'
+            # module_refs[f'{_pythonize_name(flag["@name"])}'] = (
+            module_refs[f"{_pythonize_name(flag['@name'])}"] = (
+                f"{_pythonize_name(flag['formal-name'])}"
             )
 
         for field in self.metaschema.schema_dict.get("define-field", []):
-            module_refs[f'{_pythonize_name(field["@name"])}'] = (
-                f'{_pythonize_name(field["formal-name"])}'
+            module_refs[f"{_pythonize_name(field['@name'])}"] = (
+                f"{_pythonize_name(field['formal-name'])}"
             )
 
         for assembly in self.metaschema.schema_dict.get("define-assembly", []):
-            module_refs[f'{_pythonize_name(assembly["@name"])}'] = (
-                f'{_pythonize_name(assembly["formal-name"])}'
+            module_refs[f"{_pythonize_name(assembly['@name'])}"] = (
+                f"{_pythonize_name(assembly['formal-name'])}"
             )
 
         #
@@ -123,30 +123,25 @@ class MetaschemaModelPackageGenerator:
         # Finally, we are ready to generate the module source
         template_context = {}
         template_context["imports"] = imports
+        
         template_context["classes"] = [
             generated_class.code for generated_class in self.generated_flags
         ]
 
-        template = jinja_env.get_template("module.py.jinja2")
-
-        self.generated_flag_module = template.render(template_context)
-
         # With the classes generated, we create a dict to represent all of the actually used modules and classes
-        imports = self._merge_imports(
-            [g_class.refs for g_class in self.generated_fields]
+        imports.extend(
+            self._merge_imports(
+                [g_class.refs for g_class in self.generated_fields]
+            )
         )
 
         # Fields now
         # Finally, we are ready to generate the module source
-        template_context = {}
-        template_context["imports"] = imports
-        template_context["classes"] = [
-            generated_class.code for generated_class in self.generated_fields
-        ]
+        template_context["classes"].extend([generated_class.code for generated_class in self.generated_fields])
 
         template = jinja_env.get_template("module.py.jinja2")
 
-        self.generated_field_module = template.render(template_context)
+        self.generated_module = template.render(template_context)
 
     def _merge_imports(
         self, import_item_lists: list[list[ImportItem]]
